@@ -18,6 +18,8 @@ func NewServer() types.Server {
 }
 
 func (s *Server) Start() error {
+	go attachTun("tun0")
+
 	l, err := net.Listen("tcp", "localhost:3000")
 	if err != nil {
 		log.Fatalln("couldn't listen on network")
@@ -31,6 +33,14 @@ func (s *Server) Start() error {
 		}
 		go handle(conn)
 	}
+}
+
+func attachTun(ifaceName string) error {
+	iface, err := net.InterfaceByName(ifaceName)
+	if err != nil {
+		return nil
+	}
+	return nil
 }
 
 func handle(conn net.Conn) {
