@@ -18,16 +18,37 @@ func NewServer() types.Server {
 }
 
 func (s *Server) Start() error {
-	go attachTun("tun0")
-
-	l, err := net.Listen("tcp", "localhost:3000")
+	iface, err := net.InterfaceByName("tun0")
 	if err != nil {
-		log.Fatalln("couldn't listen on network")
+		return err
 	}
+	fmt.Println("Got tun interface")
+
+	// Server pub ip -> routes to servers tun iface:3000 -> Listen on this, if is data packet -> send to main iface 
+
+	// listen on tun for traffic, 
+	// incoming gets unwrapped and redirected to target iface
+	// start goroutine lisening for incoming
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return err
+	}
+	if len(addrs) < 1 {
+		return fmt.Errorf("tun interface doesn't have an IP")
+	}
+
+	listener, err := net.Listen(addrs[0].String(), "127.0.0.1:3000")
+	if err != nil {
+		return err
+	}
+	// l, err := net.Listen("tcp", "localhost:3000")
+	// if err != nil {
+	// 	log.Fatalln("couldn't listen on network")
+	// }
 
 	for {
 		fmt.Println("Listening...")
-		conn, err := l.Accept()
+		conn, err := listener.Accept()
 		if err != nil {
 			log.Fatalln("err while accept")
 		}
@@ -38,8 +59,37 @@ func (s *Server) Start() error {
 func attachTun(ifaceName string) error {
 	iface, err := net.InterfaceByName(ifaceName)
 	if err != nil {
-		return nil
+		return err
 	}
+	fmt.Println("Got tun interface")
+
+	// Server pub ip -> routes to servers tun iface:3000 -> Listen on this, if is data packet -> send to main iface 
+
+	// listen on tun for traffic, 
+	// incoming gets unwrapped and redirected to target iface
+	// start goroutine lisening for incoming
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return err
+	}
+	if len(addrs) < 1 {
+		return fmt.Errorf("tun interface doesn't have an IP")
+	}
+
+	ip, _, _ := net.ParseCIDR(addrs[0])
+
+	listener, err := net.Listen(ip.String(), "127.0.0.1:3000")
+	if err != nil {
+		return err
+	}
+
+	for {
+		_, err := listener.Accept()
+		if err != nil {
+			return err
+		}
+	}
+	// outgoing gets wrapped and send out target iface
 	return nil
 }
 
@@ -55,7 +105,8 @@ func handle(conn net.Conn) {
 		packet := types.NewGlorpNPacket(buf[0], buf[1:len(buf)-1])
 		if packet.Header == 1 {
 			fmt.Println("Client Hello packet")
-
+		} else if packet.Header == 7 {
+			fmt.Println("Data Packet")
 		}
 		fmt.Println(string(packet.Data), packet.Header)
 
@@ -71,4 +122,3 @@ func sendKey(conn net.Conn) error {
 	_, err := conn.Write(keyPacket.Serialize())
 	return err
 }
-
