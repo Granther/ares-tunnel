@@ -26,3 +26,10 @@
 sudo ip tuntap add dev tun0 mode tun
 sudo ip addr add 10.0.0.1/24 dev tun0
 sudo ip link set up dev tun0
+
+sudo ip tuntap add dev tun0 mode tun
+sudo ip addr add 10.10.0.1/24 dev tun1
+sudo ip link set up dev tun1
+
+sudo ip addr add 10.9.0.1/24 dev tap0
+sudo ip link set up dev tap0

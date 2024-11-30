@@ -6,18 +6,22 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"syscall"
 	"unsafe"
 )
 
 type Client struct {
-	PublicIP net.IP
-	Iface    net.Interface
-	Key      string
+	PublicIP      net.IP
+	Iface         net.Interface
+	Authenticated bool
+	Key           string
 }
 
 func NewClient() types.Client {
-	return &Client{}
+	return &Client{
+		Authenticated: false,
+	}
 }
 
 func getTun(ifaceName string) (*os.File, error) {
@@ -45,7 +49,7 @@ func getTun(ifaceName string) (*os.File, error) {
 func monitorExiting(tun *os.File) {
 	buf := make([]byte, 1024)
 	for {
-		_, err := tun.Read(buf[:])
+		_, err := (*tun).Read(buf[:])
 		if err != nil {
 			log.Fatalf("Error in monitor exiting: %w \n", err)
 		}
@@ -53,67 +57,144 @@ func monitorExiting(tun *os.File) {
 	}
 }
 
-func (c *Client) Start() error {
-	file, err := os.OpenFile("/dev/net/tun", os.O_RDWR, 0)
+func execIP(command []string) {
+	exec.Command("ip", command...)
+}
+
+func (c *Client) connect(ip string) error {
+	conn, err := net.Dial("tcp", net.JoinHostPort(ip, "3000"))
 	if err != nil {
-		log.Fatalf("error os.Open(): %v\n", err)
+		return err
+	}
+	log.Printf("Dialed server at ip %s\n", ip)
+
+	err = c.sendHello(conn)
+	if err != nil {
+		return err
 	}
 
-	ifr := make([]byte, 18)
-	copy(ifr, []byte("tun0"))
-	ifr[16] = 0x01
-	ifr[17] = 0x10
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(file.Fd()),
-		uintptr(0x400454ca), uintptr(unsafe.Pointer(&ifr[0])))
-	if errno != 0 {
-		log.Fatalf("error syscall.Ioctl(): %v\n")
+	err = c.awaitAck(conn)
+	if err != nil {
+		return err
 	}
 
-	// cmd, err := exec.Run("/sbin/ifconfig",
-	// 	[]string{"ifconfig", "tun0", "192.168.7.1",
-	// 		"pointopoint", "192.168.7.2", "up"},
-	// 	nil, ".", 0, 1, 2)
-	// if err != nil {
-	// 	log.Fatalf("error exec.Run(): %v\n", err)
-	// }
-	// cmd.Wait(0)
+	c.Authenticated = true
 
+	err = c.sendData(conn, "this is data")
+	if err != nil {
+		return err
+	}
+	log.Println("Send some data to server")
+
+	return nil
+}
+
+func (c *Client) sendData(conn net.Conn, data string) error {
+	dataPack := types.NewGlorpNPacket(0x07, []byte(data))
+	_, err := conn.Write(dataPack.Serialize())
+	return err
+}	
+
+func (c *Client) awaitAck(conn net.Conn) error {
+	buf := make([]byte, 2048)
 	for {
-		buf := make([]byte, 2048)
-		read, err := file.Read(buf)
+		_, err := conn.Read(buf[:])
 		if err != nil {
-			log.Fatalf("error os.Read(): %v\n", err)
+			return err
 		}
-
-		for i := 0; i < 4; i++ {
-			buf[i+12], buf[i+16] = buf[i+16], buf[i+12]
+		ackPack := types.NewGlorpNPacket(buf[0], buf[1:len(buf)-1])
+		if ackPack.Header == 2 {
+			log.Println("Got Ack from server")
+			return nil
+		} else {
+			log.Printf("Did not get Ack from server, restart connection. %v\n", ackPack.Header)
+			panic("Didnt get ack")
 		}
-		buf[20] = 0
-		buf[22] = 0
-		buf[23] = 0
-		var checksum uint16
-		for i := 20; i < read; i += 2 {
-			checksum += uint16(buf[i])<<8 + uint16(buf[i+1])
-		}
-		checksum = ^(checksum + 4)
-		buf[22] = byte(checksum >> 8)
-		buf[23] = byte(checksum & ((1 << 8) - 1))
-
-		_, err = file.Write(buf)
-		if err != nil {
-			log.Fatalf("error os.Write(): %v\n", err)
-		}
-		fmt.Println("Got")
 	}
+}
 
-	// tun, err := getTun("tun0")
+func (c *Client) sendHello(conn net.Conn) error {
+	helloPack := types.NewGlorpNPacket(0x01, []byte("Hello"))
+	_, err := conn.Write(helloPack.Serialize())
+	if err != nil {
+		return err
+	}
+	log.Println("Sent hello to server")
+	return nil
+}
+
+func (c *Client) handleIncoming(ip string) error {
+	for {
+		_, err := net.Listen("tcp", ip)
+		if err != nil {
+			return err
+		}
+		if !c.isAuthenicated() {
+			continue
+		}
+	}
+}
+
+func (c *Client) isAuthenicated() bool {
+	return c.Authenticated
+}
+
+func (c *Client) Start() error {
+	// connect to server pub ip
+	serverIP := "192.168.1.250"
+	clientIP := "192.168.1.250"
+
+	c.connect(serverIP)
+
+	c.handleIncoming(clientIP)
+
+	// iface, err := water.New(water.Config{DeviceType: water.TUN})
 	// if err != nil {
 	// 	return err
 	// }
 
-	// monitorExiting(tun)
+	// fmt.Println("Iface name: ", iface.Name())
 
-	// return nil
+	// link, err := tenus.NewLinkFrom(iface.Name())
+	// if err != nil {
+	// 	return err
+	// }
+
+	// err = link.SetLinkMTU(1300)
+	// if nil != err {
+	// 	log.Fatalln("Unable to set MTU to 1300 on interface")
+	// }
+
+	// lIp, lNet, err := net.ParseCIDR("10.11.0.1/24")
+	// if err != nil {
+	// 	return err
+	// }
+
+	// err = link.SetLinkIp(lIp, lNet)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// err = link.SetLinkUp()
+	// if err != nil {
+	// 	return err
+	// }
+
+	// buf := make([]byte, 2048)
+	// for {
+	// 	_, err := net.Listen("tcp", "192.168.1.250:")
+	// 	//_, err := iface.Read(buf[:])
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	fmt.Printf("Data: %s \n", string(buf))
+	// 	pack := types.NewGlorpNPacket(0x07, buf)
+	// 	conn.Write(pack.Serialize())
+	// }
+
+	return nil
+
+	// Every packet that hits tun0 gets sent out destined for port 3000
 
 	// conn, err := net.Dial("tcp", "10.0.0.1:3000")
 	// if err != nil {

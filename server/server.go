@@ -19,12 +19,17 @@ func NewServer() types.Server {
 
 func (s *Server) Start() error {
 	// Listen on main interface port 3000, if we get a data packet, send to main eth
-	ip, err := getIfaceIP("tun0")
-	if err != nil {
-		return err
-	}
+	// ip, err := getIfaceIP("tun0")
+	// if err != nil {
+	// 	return err
+	// }
 
-	listener, err := net.Listen("tcp", net.JoinHostPort(ip.String(), "3000"))
+	// listener, err := net.Listen("tcp", net.JoinHostPort(ip.String(), "3000"))
+	// if err != nil {
+	// 	return err
+	// }
+	hostIP := "192.168.1.250"
+	listener, err := net.Listen("tcp", net.JoinHostPort(hostIP, "3000"))
 	if err != nil {
 		return err
 	}
@@ -35,7 +40,10 @@ func (s *Server) Start() error {
 		if err != nil {
 			log.Fatalln("err while accept")
 		}
-		go handle(conn)
+		err = handle(conn)
+		if err != nil {
+			log.Fatalf("Error handling packet: %v\n", err)
+		}
 	}
 }
 
@@ -65,43 +73,50 @@ func getIfaceIP(ifaceName string) (net.IP, error) {
 	return ip, nil
 }
 
-func handle(conn net.Conn) {
+// What do I want?
+// Server: Exit node, client's traffic is routed throuhg here
+
+func handle(conn net.Conn) error {
 	fmt.Println("Connected to: ", conn.RemoteAddr())
 	for {
 		var buf [1024]byte
 		_, err := conn.Read(buf[:])
 		if err != nil {
-			log.Println("err while reading from remote conn")
-			return
+			return fmt.Errorf("err while reading from remote conn: %w\n", err)
 		}
 		packet := types.NewGlorpNPacket(buf[0], buf[1:len(buf)-1])
 		if packet.Header == 1 {
 			fmt.Println("Client Hello packet")	
-			fmt.Println("Sending key...")
-			sendKey(conn)
-			fmt.Println("Sent key")
+			sendAck(conn)
 		} else if packet.Header == 7 {
 			fmt.Println("Data Packet")
 			sendMain(packet.Data)
 		}
-		fmt.Println(string(packet.Data), packet.Header)
 	}
 }
 
-func sendKey(conn net.Conn) error {
-	data := []byte("1234")
+// Basic tunnel
+// Send data down it across the internet
+// 
+
+func sendAck(conn net.Conn) error {
+	data := []byte("")
 	keyPacket := types.NewGlorpNPacket(0x02, data)
 	_, err := conn.Write(keyPacket.Serialize())
-	return err
-}
-
-func sendMain(data []byte) error {
-	ip, err := getIfaceIP("eth0")
 	if err != nil {
 		return err
 	}
+	log.Println("Sending ack to client")
+	return nil
+}
 
-	conn, err := net.Dial("tcp", net.JoinHostPort(ip.String(), "80"))
+func sendMain(data []byte) error {
+	// ip, err := getIfaceIP("eth0")
+	// if err != nil {
+	// 	return err
+	// }
+
+	conn, err := net.Dial("tcp", "127.0.0.1:80")
 	if err != nil {
 		return err
 	}
