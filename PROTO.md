@@ -22,6 +22,9 @@
 - Any data exiting with a src of the selected iface gets wrapped
 - Any data destined for the tun0 iface gets unwrapped 
 
+- 18.0.0.0/24 is the vpn network
+- 
+
 ### TUN
 sudo ip tuntap add dev tun0 mode tun
 sudo ip addr add 10.0.0.1/24 dev tun0

@@ -28,7 +28,7 @@ func (s *Server) Start() error {
 	// if err != nil {
 	// 	return err
 	// }
-	hostIP := "192.168.1.250"
+	hostIP := "10.20.0.1"
 	listener, err := net.Listen("tcp", net.JoinHostPort(hostIP, "3000"))
 	if err != nil {
 		return err
@@ -52,9 +52,9 @@ func getIfaceIP(ifaceName string) (net.IP, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Server pub ip -> routes to servers tun iface:3000 -> Listen on this, if is data packet -> send to main iface 
+	// Server pub ip -> routes to servers tun iface:3000 -> Listen on this, if is data packet -> send to main iface
 
-	// listen on tun for traffic, 
+	// listen on tun for traffic,
 	// incoming gets unwrapped and redirected to target iface
 	// start goroutine lisening for incoming
 	addrs, err := iface.Addrs()
@@ -86,7 +86,7 @@ func handle(conn net.Conn) error {
 		}
 		packet := types.NewGlorpNPacket(buf[0], buf[1:len(buf)-1])
 		if packet.Header == 1 {
-			fmt.Println("Client Hello packet")	
+			fmt.Println("Client Hello packet")
 			sendAck(conn)
 		} else if packet.Header == 7 {
 			fmt.Println("Data Packet, data: ", string(packet.Data))
@@ -97,7 +97,7 @@ func handle(conn net.Conn) error {
 
 // Basic tunnel
 // Send data down it across the internet
-// 
+//
 
 func sendAck(conn net.Conn) error {
 	data := []byte("")

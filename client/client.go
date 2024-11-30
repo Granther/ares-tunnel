@@ -86,6 +86,11 @@ func (c *Client) connect(ip string) error {
 	}
 	log.Println("Send some data to server")
 
+	err = c.handleIncoming(ip)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -124,15 +129,26 @@ func (c *Client) sendHello(conn net.Conn) error {
 }
 
 func (c *Client) handleIncoming(ip string) error {
+	fmt.Println("Made it here 1")
+
+	listener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP(ip), Port: 80})
+	if err != nil {
+		return err
+	}
+	//buf := make([]byte, 2048)
+	fmt.Println("Made it here 2")
 	for {
-		_, err := net.Listen("tcp", ip)
+		_, err = listener.Accept()
 		if err != nil {
 			return err
 		}
+		fmt.Println("Accepted")
+		// fmt.Println("Got data: ", string(buf))
 		if !c.isAuthenicated() {
 			continue
 		}
 	}
+	return nil
 }
 
 func (c *Client) isAuthenicated() bool {
@@ -142,12 +158,10 @@ func (c *Client) isAuthenicated() bool {
 func (c *Client) Start() error {
 	// connect to server pub ip
 
-	serverIP := "104.1.220.133"
-	clientIP := "0.0.0.0"
+	serverIP := "10.20.0.1"
+	// clientIP := "0.0.0.0"
 
-	c.connect(serverIP)
-
-	c.handleIncoming(clientIP)
+	return c.connect(serverIP)
 
 	// iface, err := water.New(water.Config{DeviceType: water.TUN})
 	// if err != nil {
