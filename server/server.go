@@ -18,33 +18,16 @@ func NewServer() types.Server {
 }
 
 func (s *Server) Start() error {
-	iface, err := net.InterfaceByName("tun0")
+	// Listen on main interface port 3000, if we get a data packet, send to main eth
+	ip, err := getIfaceIP("tun0")
 	if err != nil {
 		return err
 	}
-	fmt.Println("Got tun interface")
 
-	// Server pub ip -> routes to servers tun iface:3000 -> Listen on this, if is data packet -> send to main iface 
-
-	// listen on tun for traffic, 
-	// incoming gets unwrapped and redirected to target iface
-	// start goroutine lisening for incoming
-	addrs, err := iface.Addrs()
+	listener, err := net.Listen("tcp", net.JoinHostPort(ip.String(), "3000"))
 	if err != nil {
 		return err
 	}
-	if len(addrs) < 1 {
-		return fmt.Errorf("tun interface doesn't have an IP")
-	}
-
-	listener, err := net.Listen(addrs[0].String(), "127.0.0.1:3000")
-	if err != nil {
-		return err
-	}
-	// l, err := net.Listen("tcp", "localhost:3000")
-	// if err != nil {
-	// 	log.Fatalln("couldn't listen on network")
-	// }
 
 	for {
 		fmt.Println("Listening...")
@@ -56,13 +39,11 @@ func (s *Server) Start() error {
 	}
 }
 
-func attachTun(ifaceName string) error {
+func getIfaceIP(ifaceName string) (net.IP, error) {
 	iface, err := net.InterfaceByName(ifaceName)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fmt.Println("Got tun interface")
-
 	// Server pub ip -> routes to servers tun iface:3000 -> Listen on this, if is data packet -> send to main iface 
 
 	// listen on tun for traffic, 
@@ -70,27 +51,18 @@ func attachTun(ifaceName string) error {
 	// start goroutine lisening for incoming
 	addrs, err := iface.Addrs()
 	if err != nil {
-		return err
+		return nil, err
 	}
+
 	if len(addrs) < 1 {
-		return fmt.Errorf("tun interface doesn't have an IP")
+		return nil, fmt.Errorf("tun interface doesn't have an IP")
 	}
 
-	ip, _, _ := net.ParseCIDR(addrs[0])
-
-	listener, err := net.Listen(ip.String(), "127.0.0.1:3000")
+	ip, _, err := net.ParseCIDR(addrs[0].String())
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	for {
-		_, err := listener.Accept()
-		if err != nil {
-			return err
-		}
-	}
-	// outgoing gets wrapped and send out target iface
-	return nil
+	return ip, nil
 }
 
 func handle(conn net.Conn) {
@@ -104,15 +76,15 @@ func handle(conn net.Conn) {
 		}
 		packet := types.NewGlorpNPacket(buf[0], buf[1:len(buf)-1])
 		if packet.Header == 1 {
-			fmt.Println("Client Hello packet")
+			fmt.Println("Client Hello packet")	
+			fmt.Println("Sending key...")
+			sendKey(conn)
+			fmt.Println("Sent key")
 		} else if packet.Header == 7 {
 			fmt.Println("Data Packet")
+			sendMain(packet.Data)
 		}
 		fmt.Println(string(packet.Data), packet.Header)
-
-		fmt.Println("Sending key...")
-		sendKey(conn)
-		fmt.Println("Sent key")
 	}
 }
 
@@ -121,4 +93,22 @@ func sendKey(conn net.Conn) error {
 	keyPacket := types.NewGlorpNPacket(0x02, data)
 	_, err := conn.Write(keyPacket.Serialize())
 	return err
+}
+
+func sendMain(data []byte) error {
+	ip, err := getIfaceIP("eth0")
+	if err != nil {
+		return err
+	}
+
+	conn, err := net.Dial("tcp", net.JoinHostPort(ip.String(), "80"))
+	if err != nil {
+		return err
+	}
+
+	conn.Write(data)
+
+	// keyPacket := types.NewGlorpNPacket(0x07, data)
+	// _, err := conn.Write(keyPacket.Serialize())
+	return nil
 }
