@@ -141,8 +141,9 @@ func (c *Client) isAuthenicated() bool {
 
 func (c *Client) Start() error {
 	// connect to server pub ip
-	serverIP := "192.168.1.250"
-	clientIP := "192.168.1.250"
+
+	serverIP := "104.1.220.133"
+	clientIP := "0.0.0.0"
 
 	c.connect(serverIP)
 

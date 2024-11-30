@@ -42,7 +42,7 @@ func (s *Server) Start() error {
 		}
 		err = handle(conn)
 		if err != nil {
-			log.Fatalf("Error handling packet: %v\n", err)
+			fmt.Printf("Error handling packet: %v\n", err)
 		}
 	}
 }
@@ -78,19 +78,19 @@ func getIfaceIP(ifaceName string) (net.IP, error) {
 
 func handle(conn net.Conn) error {
 	fmt.Println("Connected to: ", conn.RemoteAddr())
+	buf := make([]byte, 2048)
 	for {
-		var buf [1024]byte
 		_, err := conn.Read(buf[:])
 		if err != nil {
-			return fmt.Errorf("err while reading from remote conn: %w\n", err)
+			return fmt.Errorf("err while reading from remote conn, closing conn and waiting again: %w\n", err)
 		}
 		packet := types.NewGlorpNPacket(buf[0], buf[1:len(buf)-1])
 		if packet.Header == 1 {
 			fmt.Println("Client Hello packet")	
 			sendAck(conn)
 		} else if packet.Header == 7 {
-			fmt.Println("Data Packet")
-			sendMain(packet.Data)
+			fmt.Println("Data Packet, data: ", string(packet.Data))
+			// sendMain(packet.Data)
 		}
 	}
 }
