@@ -28,7 +28,7 @@ func (s *Server) Start() error {
 	// if err != nil {
 	// 	return err
 	// }
-	hostIP := "10.20.0.1"
+	hostIP := "18.0.0.1"
 	listener, err := net.Listen("tcp", net.JoinHostPort(hostIP, "3000"))
 	if err != nil {
 		return err

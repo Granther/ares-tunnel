@@ -89,7 +89,7 @@ func (c *Client) connect(ip string) error {
 	}
 	log.Println("Send some data to server")
 
-	err = c.handleIncoming(ip)
+	err = c.handleIncoming(conn, ip)
 	if err != nil {
 		return err
 	}
@@ -131,17 +131,25 @@ func (c *Client) sendHello(conn net.Conn) error {
 	return nil
 }
 
-func (c *Client) handleIncoming(ip string) error {
+func (c *Client) handleIncoming(conn net.Conn, ip string) error {
 	fmt.Println("Made it here 1")
 
-	handle, err := pcap.OpenLive("dummy0", 1600, true, pcap.BlockForever)
+	handle, err := pcap.OpenLive("eth0", 1500, true, pcap.BlockForever)
 	if err != nil {
 		return err
 	}
 
 	packetSrc := gopacket.NewPacketSource(handle, handle.LinkType())
-	for range packetSrc.Packets() {
+	for packet := range packetSrc.Packets() {
 		fmt.Println("Got packet on dummy")
+		glorpPack := types.NewGlorpNPacket(0x07, packet.Data())
+		_, err := conn.Write(glorpPack.Serialize())
+		if err != nil {
+			return err
+		}
+		if !c.isAuthenicated() {
+			continue
+		}
 	}
 
 	// listener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP(ip), Port: 80})
@@ -171,7 +179,7 @@ func (c *Client) isAuthenicated() bool {
 func (c *Client) Start() error {
 	// connect to server pub ip
 
-	serverIP := "10.20.0.1"
+	serverIP := "18.0.0.1"
 	// clientIP := "0.0.0.0"
 
 	return c.connect(serverIP)
