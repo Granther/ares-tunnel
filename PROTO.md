@@ -36,3 +36,7 @@ sudo ip link set up dev tun1
 
 sudo ip addr add 10.9.0.1/24 dev tap0
 sudo ip link set up dev tap0
+
+sudo ip link add dev dummy0 type dummy
+sudo ip link set dummy0 up
+sudo ip addr add 18.0.0.1/24 dev dummy0

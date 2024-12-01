@@ -9,6 +9,9 @@ import (
 	"os/exec"
 	"syscall"
 	"unsafe"
+
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/pcap"
 )
 
 type Client struct {
@@ -98,7 +101,7 @@ func (c *Client) sendData(conn net.Conn, data string) error {
 	dataPack := types.NewGlorpNPacket(0x07, []byte(data))
 	_, err := conn.Write(dataPack.Serialize())
 	return err
-}	
+}
 
 func (c *Client) awaitAck(conn net.Conn) error {
 	buf := make([]byte, 2048)
@@ -131,23 +134,33 @@ func (c *Client) sendHello(conn net.Conn) error {
 func (c *Client) handleIncoming(ip string) error {
 	fmt.Println("Made it here 1")
 
-	listener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP(ip), Port: 80})
+	handle, err := pcap.OpenLive("dummy0", 1600, true, pcap.BlockForever)
 	if err != nil {
 		return err
 	}
-	//buf := make([]byte, 2048)
-	fmt.Println("Made it here 2")
-	for {
-		_, err = listener.Accept()
-		if err != nil {
-			return err
-		}
-		fmt.Println("Accepted")
-		// fmt.Println("Got data: ", string(buf))
-		if !c.isAuthenicated() {
-			continue
-		}
+
+	packetSrc := gopacket.NewPacketSource(handle, handle.LinkType())
+	for range packetSrc.Packets() {
+		fmt.Println("Got packet on dummy")
 	}
+
+	// listener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP(ip), Port: 80})
+	// if err != nil {
+	// 	return err
+	// }
+	// //buf := make([]byte, 2048)
+	// fmt.Println("Made it here 2")
+	// for {
+	// 	_, err = listener.Accept()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	fmt.Println("Accepted")
+	// 	// fmt.Println("Got data: ", string(buf))
+	// 	if !c.isAuthenicated() {
+	// 		continue
+	// 	}
+	// }
 	return nil
 }
 
