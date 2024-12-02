@@ -181,9 +181,18 @@ func (c *Client) handleIncoming(conn net.Conn, ip string) error {
 
 		ipv4Layers, ok := networkLayer.(*layers.IPv4)
 		if ok {
+			fmt.Println(ipv4Layers.SrcIP.String())
 			fmt.Println("is ipv4")
-		} else {
-			fmt.Println("is not")
+		} 
+
+		glorpPack := types.NewGlorpNPacket(0x07, packet.Data())
+		_, err = conn.Write(glorpPack.Serialize())
+		if err != nil {
+			return err
+		}
+		if !c.isAuthenicated() {
+			fmt.Println("Not authenicated, skipping...")
+			continue
 		}
 	}
 
