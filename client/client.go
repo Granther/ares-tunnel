@@ -15,12 +15,17 @@ import (
 	"github.com/net-byte/water"
 )
 
+const (
+	BUFSIZE = 1024
+)
+
 type Client struct {
 	PublicIP       net.IP
 	Iface          net.Interface
 	TunSource      *gopacket.PacketSource
 	Authenticated  bool
 	WANIfaceHandle *pcap.Handle
+	TunnelConn     net.Conn
 }
 
 func NewClient() types.Client {
@@ -69,7 +74,7 @@ func (c *Client) connect(ip string) error {
 	}
 	log.Println("Send some data to server")
 
-	err = c.handleIncoming(conn, ip)
+	err = c.handleIncoming(conn)
 	if err != nil {
 		return err
 	}
@@ -111,7 +116,7 @@ func (c *Client) sendHello(conn net.Conn) error {
 	return nil
 }
 
-func (c *Client) handleIncoming(conn net.Conn, ip string) error {
+func (c *Client) handleIncoming(conn net.Conn) error {
 	for packet := range c.TunSource.Packets() {
 		networkLayer := packet.NetworkLayer()
 
@@ -235,10 +240,15 @@ func (c *Client) serve(wanIfaceName string) error {
 		return err
 	}
 
-	listener, err := net.Listen("tcp", net.JoinHostPort(ip, "3000"))
+	c.TunnelConn, err = net.Dial("tcp", net.JoinHostPort(ip, "3000"))
 	if err != nil {
 		return fmt.Errorf("failed to start listener on wan iface: %w", err)
 	}
+
+	// listener, err := net.Listen("tcp", net.JoinHostPort(ip, "3000"))
+	// if err != nil {
+	// 	return fmt.Errorf("failed to start listener on wan iface: %w", err)
+	// }
 
 	// Create handle for main iface
 	c.WANIfaceHandle, err = pcap.OpenLive(wanIfaceName, 1600, true, pcap.BlockForever)
@@ -246,13 +256,14 @@ func (c *Client) serve(wanIfaceName string) error {
 		return fmt.Errorf("failed to create %v handle: %w", wanIfaceName, err)
 	}
 
+	buf := make([]byte, BUFSIZE)
 	for {
 		fmt.Println("Listening...")
-		conn, err := listener.Accept()
+		_, err = c.TunnelConn.Read(buf[:])
 		if err != nil {
-			log.Fatalln("err while accept")
+			log.Fatalln("err while reading conn")
 		}
-		err = c.handle(conn)
+		err = c.handle(c.TunnelConn)
 		if err != nil {
 			fmt.Printf("Error handling packet: %v\n", err)
 		}
@@ -360,13 +371,18 @@ func (c *Client) Start(wanIfaceName, peerIP string) error {
 
 	if peerIP == "" {
 		fmt.Println("No peer, only listening")
-		for {
+	}
+
+	if !c.Authenticated {
+		err = c.connect(peerIP)
+		if err != nil {
+			return fmt.Errorf("failed to connect on peerip: %v: %w", peerIP, err)
 		}
 	}
 
-	err = c.connect(peerIP)
+	err = c.handleIncoming(c.TunnelConn)
 	if err != nil {
-		return fmt.Errorf("failed to connect on peerip: %v: %w", peerIP, err)
+		return fmt.Errorf("failed to handle incoming non-3000 traffic: %w", err)
 	}
 
 	return nil
