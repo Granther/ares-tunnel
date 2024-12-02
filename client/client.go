@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/pcap"
+	"github.com/milosgajdos/tenus"
+	"github.com/net-byte/water"
 )
 
 type Client struct {
@@ -132,25 +132,78 @@ func (c *Client) sendHello(conn net.Conn) error {
 }
 
 func (c *Client) handleIncoming(conn net.Conn, ip string) error {
-	fmt.Println("Made it here 1")
+	// Create TUN interface
+	config := water.Config{
+		DeviceType: water.TUN, // Use water.TAP for a TAP device
+	}
+	config.Name = "tun0" // Optional: Specify the interface name
 
-	handle, err := pcap.OpenLive("eth0", 1500, true, pcap.BlockForever)
+	iface, err := water.New(config)
 	if err != nil {
-		return err
+		log.Fatalf("Failed to create TUN interface: %v", err)
 	}
 
-	packetSrc := gopacket.NewPacketSource(handle, handle.LinkType())
-	for packet := range packetSrc.Packets() {
-		fmt.Println("Got packet on dummy")
-		glorpPack := types.NewGlorpNPacket(0x07, packet.Data())
-		_, err := conn.Write(glorpPack.Serialize())
+	link, err := tenus.NewLinkFrom(config.Name)
+	if err != nil {
+		log.Fatalf("Failed to get link for interface %s: %v", config.Name, err)
+	}
+
+	ipAddr, ipNet, err := net.ParseCIDR("20.0.0.1/24")
+	if err != nil {
+		log.Fatalf("Failed to parse CIDR: %v", err)
+	}
+
+	// Assign the IP address
+	err = link.SetLinkIp(ipAddr, ipNet)
+	if err != nil {
+		log.Fatalf("Failed to set IP address: %v", err)
+	}
+
+	err = link.SetLinkUp()
+	if err != nil {
+		log.Fatalf("Failed to set tun link up: %v", err)
+	}
+
+	fmt.Printf("Interface %s is up\n", iface.Name())
+
+	// Process packets
+	packet := make([]byte, 1500) // MTU size
+	for {
+		n, err := iface.Read(packet)
+		if err != nil {
+			log.Fatalf("Error reading packet: %v", err)
+		}
+		fmt.Printf("Received packet: %x\n", packet[:n])
+		glorpPack := types.NewGlorpNPacket(0x07, packet[:n])
+		_, err = conn.Write(glorpPack.Serialize())
 		if err != nil {
 			return err
 		}
 		if !c.isAuthenicated() {
+			fmt.Println("Not authenicated, skipping...")
 			continue
 		}
+		// Process the packet
+		// Write responses back to iface.Write(packet[:n]) if needed
 	}
+
+	// handle, err := pcap.OpenLive("eth0", 1500, true, pcap.BlockForever)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// packetSrc := gopacket.NewPacketSource(handle, handle.LinkType())
+	// for packet := range packetSrc.Packets() {
+	// 	fmt.Println("Got packet on dummy")
+	// 	glorpPack := types.NewGlorpNPacket(0x07, packet.Data())
+	// 	_, err := conn.Write(glorpPack.Serialize())
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	if !c.isAuthenicated() {
+	// 		continue
+	// 	}
+	// }
 
 	// listener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP(ip), Port: 80})
 	// if err != nil {
