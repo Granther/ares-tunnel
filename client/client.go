@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/exec"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -45,10 +44,6 @@ func monitorExiting(tun *os.File) {
 	}
 }
 
-func execIP(command []string) {
-	exec.Command("ip", command...)
-}
-
 func (c *Client) connect(ip string) error {
 	conn, err := net.Dial("tcp", net.JoinHostPort(ip, "3000"))
 	if err != nil {
@@ -73,11 +68,6 @@ func (c *Client) connect(ip string) error {
 		return err
 	}
 	log.Println("Send some data to server")
-
-	err = c.handleIncoming(conn)
-	if err != nil {
-		return err
-	}
 
 	return nil
 }
@@ -234,21 +224,22 @@ func getIfaceIP(ifaceName string) (string, error) {
 	return "", fmt.Errorf("iface did not have any addrs")
 }
 
+// Listen on main wan iface for port 3000 traffic
 func (c *Client) serve(wanIfaceName string) error {
 	ip, err := getIfaceIP(wanIfaceName)
 	if err != nil {
 		return err
 	}
 
-	c.TunnelConn, err = net.Dial("tcp", net.JoinHostPort(ip, "3000"))
-	if err != nil {
-		return fmt.Errorf("failed to start listener on wan iface: %w", err)
-	}
-
-	// listener, err := net.Listen("tcp", net.JoinHostPort(ip, "3000"))
+	// c.TunnelConn, err = net.Dial("tcp", net.JoinHostPort(ip, "3000"))
 	// if err != nil {
 	// 	return fmt.Errorf("failed to start listener on wan iface: %w", err)
 	// }
+
+	listener, err := net.Listen("tcp", net.JoinHostPort(ip, "3000"))
+	if err != nil {
+		return fmt.Errorf("failed to start listener on wan iface: %w", err)
+	}
 
 	// Create handle for main iface
 	c.WANIfaceHandle, err = pcap.OpenLive(wanIfaceName, 1600, true, pcap.BlockForever)
@@ -256,14 +247,13 @@ func (c *Client) serve(wanIfaceName string) error {
 		return fmt.Errorf("failed to create %v handle: %w", wanIfaceName, err)
 	}
 
-	buf := make([]byte, BUFSIZE)
 	for {
 		fmt.Println("Listening...")
-		_, err = c.TunnelConn.Read(buf[:])
+		conn, err := listener.Accept()
 		if err != nil {
 			log.Fatalln("err while reading conn")
 		}
-		err = c.handle(c.TunnelConn)
+		err = c.handle(conn)
 		if err != nil {
 			fmt.Printf("Error handling packet: %v\n", err)
 		}
@@ -371,9 +361,9 @@ func (c *Client) Start(wanIfaceName, peerIP string) error {
 
 	if peerIP == "" {
 		fmt.Println("No peer, only listening")
-	}
-
-	if !c.Authenticated {
+		for {
+		}
+	} else {
 		err = c.connect(peerIP)
 		if err != nil {
 			return fmt.Errorf("failed to connect on peerip: %v: %w", peerIP, err)
