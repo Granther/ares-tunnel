@@ -24,7 +24,7 @@ type Client struct {
 	TunSource      *gopacket.PacketSource
 	Authenticated  bool
 	WANIfaceHandle *pcap.Handle
-	TunnelConn     net.Conn
+	TunnelConn     *net.Conn
 }
 
 func NewClient() types.Client {
@@ -69,7 +69,7 @@ func (c *Client) connect(ip string) error {
 	}
 	log.Println("Send some data to server")
 
-	c.TunnelConn = conn
+	c.TunnelConn = &conn
 
 	return nil
 }
@@ -109,9 +109,9 @@ func (c *Client) sendHello(conn net.Conn) error {
 }
 
 func (c *Client) handleIncoming() error {
-	if c.isAuthenicated() {
+	if c.isAuthenicated() && c.TunnelConn == nil {
 		var err error
-		c.TunnelConn, err = net.Dial("tcp", net.JoinHostPort(c.WANIp, "3000"))
+		*c.TunnelConn, err = net.Dial("tcp", net.JoinHostPort(c.WANIp, "3000"))
 		if err != nil {
 			return err
 		}
@@ -134,7 +134,7 @@ func (c *Client) handleIncoming() error {
 		}
 
 		glorpPack := types.NewGlorpNPacket(0x07, packet.Data())
-		_, err := c.TunnelConn.Write(glorpPack.Serialize())
+		_, err := (*c.TunnelConn).Write(glorpPack.Serialize())
 		if err != nil {
 			return err
 		}
@@ -374,8 +374,6 @@ func (c *Client) Start(wanIfaceName, peerIP string) error {
 
 	if peerIP == "" {
 		fmt.Println("No peer, only listening")
-		for {
-		}
 	} else {
 		err = c.connect(peerIP)
 		if err != nil {
