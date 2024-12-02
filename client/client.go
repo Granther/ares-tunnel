@@ -185,6 +185,8 @@ func (c *Client) handleIncoming(conn net.Conn, ip string) error {
 			fmt.Println("is ipv4")
 		} 
 
+		fmt.Println(packet.String())
+
 		glorpPack := types.NewGlorpNPacket(0x07, packet.Data())
 		_, err = conn.Write(glorpPack.Serialize())
 		if err != nil {

@@ -67,8 +67,10 @@ func (s *Server) handle(conn net.Conn) error {
 			fmt.Println("Data Packet, data: ", string(packet.Data))
 			newPack, err := s.resourcePacket(packet.Data)
 			if err != nil {
-				return err
+				fmt.Println("Got error while resourcing packet, ignoring: ", err)
+				continue
 			}
+
 			err = s.MainIfaceHandle.WritePacketData(newPack)
 			if err != nil {
 				return err
@@ -78,22 +80,25 @@ func (s *Server) handle(conn net.Conn) error {
 }
 
 func (s *Server) resourcePacket(data []byte) ([]byte, error) {
-	packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.Default)
+	packet := gopacket.NewPacket(data, layers.LayerTypeIPv4, gopacket.Default)
 
-	ethLayer := packet.Layer(layers.LayerTypeEthernet)
+	// fmt.Println(packet.String())
+
+	// ethLayer := packet.Layer(layers.LayerTypeEthernet)
 	ipLayer := packet.Layer(layers.LayerTypeIPv4)
 
-	if ethLayer == nil || ipLayer == nil {
+	if ipLayer == nil {
 		return nil, fmt.Errorf("eth or ip layer was nil")
 	}
 
-	eth := ethLayer.(*layers.Ethernet)
+	// eth := ethLayer.(*layers.Ethernet)
 	ip := ipLayer.(*layers.IPv4)
 
-	newEth := *eth
+	// newEth := *eth
 	newIP := *ip
 
-	newIP.SrcIP = net.IP{20, 0, 0, 2}
+	newIP.SrcIP = net.IP{192, 168, 1, 14}
+	newIP.DstIP = net.IP{8, 8, 8, 8}
 
 	buffer := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{
@@ -101,7 +106,7 @@ func (s *Server) resourcePacket(data []byte) ([]byte, error) {
 		ComputeChecksums: true,
 	}
 
-	err := gopacket.SerializeLayers(buffer, opts, &newEth, &newIP)
+	err := gopacket.SerializeLayers(buffer, opts, &newIP)
 	if err != nil {
 		return nil, fmt.Errorf("failed to serialize layers")
 	}
@@ -113,7 +118,6 @@ func (s *Server) resourcePacket(data []byte) ([]byte, error) {
 
 // Basic tunnel
 // Send data down it across the internet
-//
 
 func sendAck(conn net.Conn) error {
 	data := []byte("")
