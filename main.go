@@ -15,7 +15,20 @@ func main() {
 		log.Fatalln("Incorrect usage")
 	} else if args[1] == "client" {
 		fmt.Println("Running Client")
-		err := runClient()
+		var wanIface string; var peerIP string
+		if len(args) < 3 {
+			wanIface = "eth0"
+		} else {
+			wanIface = args[2]
+		}
+
+		if len(args) < 4 {
+			peerIP = ""
+		} else {
+			peerIP = args[3]
+		}
+		
+		err := runClient(wanIface, peerIP)
 		if err != nil {
 			log.Fatalln("Error in runclient: ", err)
 		}
@@ -35,7 +48,7 @@ func runServer() error {
 	return server.Start()
 }
 
-func runClient() error {
+func runClient(wanIface, peerIP string) error {
 	client := client.NewClient()
-	return client.Start()
+	return client.Start(wanIface, peerIP)
 }

@@ -1,7 +1,7 @@
 package types
 
 type Client interface {
-	Start() error 
+	Start(wanIface, peerIP string) error 
 }
 
 type Server interface {

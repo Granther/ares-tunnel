@@ -7,8 +7,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"syscall"
-	"unsafe"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -18,38 +16,16 @@ import (
 )
 
 type Client struct {
-	PublicIP      net.IP
-	Iface         net.Interface
-	Authenticated bool
-	Key           string
+	PublicIP       net.IP
+	Iface          net.Interface
+	Authenticated  bool
+	WANIfaceHandle *pcap.Handle
 }
 
 func NewClient() types.Client {
 	return &Client{
 		Authenticated: false,
 	}
-}
-
-func getTun(ifaceName string) (*os.File, error) {
-	tun, err := os.OpenFile("/dev/net/tun", os.O_RDWR, 0)
-	if err != nil {
-		return nil, err
-	}
-
-	var req struct {
-		Name  [16]byte
-		Flags uint16
-	}
-
-	req.Flags = syscall.IFF_TUN | syscall.IFF_NO_PI // TUN mode, no extra packet info
-	copy(req.Name[:], ifaceName)
-
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, tun.Fd(), uintptr(syscall.TUNSETIFF), uintptr(unsafe.Pointer(&req)))
-	if errno != 0 {
-		return nil, fmt.Errorf("failed to create TUN interface: %v", errno)
-	}
-
-	return tun, nil
 }
 
 func monitorExiting(tun *os.File) {
@@ -183,7 +159,7 @@ func (c *Client) handleIncoming(conn net.Conn, ip string) error {
 		if ok {
 			fmt.Println(ipv4Layers.SrcIP.String())
 			fmt.Println("is ipv4")
-		} 
+		}
 
 		fmt.Println(packet.String())
 
@@ -272,13 +248,102 @@ func (c *Client) isAuthenicated() bool {
 	return c.Authenticated
 }
 
-func (c *Client) Start() error {
+func getIfaceIP(ifaceName string) (string, error) {
+	iface, err := net.InterfaceByName(ifaceName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get interface %v by name: %w", ifaceName, err)
+	}
+
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return "", fmt.Errorf("failed to get interface %v's addrs: %w", ifaceName, err)
+	}
+
+	if len(addrs) >= 1 {
+		return addrs[0].String(), nil
+	}
+	return "", fmt.Errorf("iface did not have any addrs")
+}
+
+func (c *Client) serve(wanIfaceName string) error {
+	ip, err := getIfaceIP(wanIfaceName)
+	if err != nil {
+		return err
+	}
+
+	listener, err := net.Listen("tcp", net.JoinHostPort(ip, "3000"))
+	if err != nil {
+		return err
+	}
+
+	// Create handle for main iface
+	c.WANIfaceHandle, err = pcap.OpenLive(wanIfaceName, 1600, true, pcap.BlockForever)
+	if err != nil {
+		fmt.Errorf("failed to create %v handle: %w", wanIfaceName, err)
+	}
+
+	for {
+		fmt.Println("Listening...")
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Fatalln("err while accept")
+		}
+		err = c.handle(conn)
+		if err != nil {
+			fmt.Printf("Error handling packet: %v\n", err)
+		}
+	}
+}
+
+func (c *Client) handle(conn net.Conn) error {
+	fmt.Println("Connected to: ", conn.RemoteAddr())
+	buf := make([]byte, 2048)
+	for {
+		_, err := conn.Read(buf[:])
+		if err != nil {
+			return fmt.Errorf("err while reading from remote conn, closing conn and waiting again: %v", err)
+		}
+		packet := types.NewGlorpNPacket(buf[0], buf[1:len(buf)-1])
+		if packet.Header == 1 {
+			fmt.Println("Client Hello packet")
+			c.sendAck(conn)
+		} else if packet.Header == 7 {
+			err = c.WANIfaceHandle.WritePacketData(packet.Data)
+			if err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func (c *Client) sendAck(conn net.Conn) error {
+	data := []byte("")
+	keyPacket := types.NewGlorpNPacket(0x02, data)
+	_, err := conn.Write(keyPacket.Serialize())
+	if err != nil {
+		return err
+	}
+	log.Println("Sending ack to client")
+	return nil
+}
+
+func (c *Client) Start(wanIfaceName, peerIP string) error {
 	// connect to server pub ip
 
-	serverIP := "18.0.0.1"
-	// clientIP := "0.0.0.0"
+	go c.serve(wanIfaceName)
 
-	return c.connect(serverIP)
+	if peerIP == "" {
+		fmt.Println("No peer, only listening")
+		for {
+		}
+	}
+
+	err := c.connect(peerIP)
+	if err != nil {
+		return fmt.Errorf("failed to connect on peerip: %v: %w", peerIP, err)
+	}
+
+	return nil
 
 	// iface, err := water.New(water.Config{DeviceType: water.TUN})
 	// if err != nil {
@@ -323,8 +388,6 @@ func (c *Client) Start() error {
 	// 	pack := types.NewGlorpNPacket(0x07, buf)
 	// 	conn.Write(pack.Serialize())
 	// }
-
-	return nil
 
 	// Every packet that hits tun0 gets sent out destined for port 3000
 

@@ -64,14 +64,14 @@ func (s *Server) handle(conn net.Conn) error {
 			fmt.Println("Client Hello packet")
 			sendAck(conn)
 		} else if packet.Header == 7 {
-			fmt.Println("Data Packet, data: ", string(packet.Data))
-			newPack, err := s.resourcePacket(packet.Data)
-			if err != nil {
-				fmt.Println("Got error while resourcing packet, ignoring: ", err)
-				continue
-			}
+			// fmt.Println("Data Packet, data: ", string(packet.Data))
+			// newPack, err := s.resourcePacket(packet.Data)
+			// if err != nil {
+			// 	fmt.Println("Got error while resourcing packet, ignoring: ", err)
+			// 	continue
+			// }
 
-			err = s.MainIfaceHandle.WritePacketData(newPack)
+			err = s.MainIfaceHandle.WritePacketData(packet.Data)
 			if err != nil {
 				return err
 			}
@@ -84,34 +84,74 @@ func (s *Server) resourcePacket(data []byte) ([]byte, error) {
 
 	// fmt.Println(packet.String())
 
-	// ethLayer := packet.Layer(layers.LayerTypeEthernet)
-	ipLayer := packet.Layer(layers.LayerTypeIPv4)
+	return packet.Data(), nil
 
-	if ipLayer == nil {
-		return nil, fmt.Errorf("eth or ip layer was nil")
-	}
+	// for i, lay := range packet.Layers() {
 
-	// eth := ethLayer.(*layers.Ethernet)
-	ip := ipLayer.(*layers.IPv4)
+	// }
 
-	// newEth := *eth
-	newIP := *ip
+	// ipLayer := packet.Layer(layers.LayerTypeIPv4)
+	// icmpLayer := packet.Layer(layers.LayerTypeICMPv4)
 
-	newIP.SrcIP = net.IP{192, 168, 1, 14}
-	newIP.DstIP = net.IP{8, 8, 8, 8}
+	// // payloadLayer := packet.Layer(layers.LayerTypePayload)
 
-	buffer := gopacket.NewSerializeBuffer()
-	opts := gopacket.SerializeOptions{
-		FixLengths:       true,
-		ComputeChecksums: true,
-	}
+	// if ipLayer == nil {
+	// 	return nil, fmt.Errorf("eth or ip layer was nil")
+	// }
 
-	err := gopacket.SerializeLayers(buffer, opts, &newIP)
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize layers")
-	}
+	// // eth := ethLayer.(*layers.Ethernet)
+	// ip := ipLayer.(*layers.IPv4)
+	// icmp := icmpLayer.(*layers.ICMPv4)
 
-	return buffer.Bytes(), nil
+	// // newEth := *eth
+	// oldIP := *ip
+	// oldIcmp := *icmp
+
+	// newIP := layers.IPv4{
+	// 	Version:    oldIP.Version,
+	// 	IHL:        oldIP.IHL,
+	// 	TOS:        oldIP.TOS,
+	// 	Length:     oldIP.Length,
+	// 	Id:         oldIP.Id,
+	// 	Flags:      oldIP.Flags,
+	// 	FragOffset: oldIP.FragOffset,
+	// 	TTL:        oldIP.TTL,
+	// 	Protocol:   oldIP.Protocol,
+	// 	Checksum:   oldIP.Checksum,
+	// 	SrcIP:      net.IP{192, 168, 1, 14},
+	// 	DstIP:      net.IP{8, 8, 8, 8},
+	// 	Options:    oldIP.Options,
+	// 	Padding:    oldIP.Padding,
+	// }
+
+	// newIcmp := layers.ICMPv4{
+	// 	TypeCode: oldIcmp.TypeCode,
+	// 	Checksum: oldIcmp.Checksum,
+	// 	Id:       oldIcmp.Id,
+	// 	Seq:      oldIcmp.Seq,
+	// }
+
+	// newIcmp.Payload = oldIcmp.Payload
+
+	// l, ok := packet.ApplicationLayer().(*layers.Layer)
+
+	// // pay := layers.ICMPv4
+
+	// // newIP.SrcIP = net.IP{192, 168, 1, 14}
+	// // newIP.DstIP = net.IP{8, 8, 8, 8}
+
+	// buffer := gopacket.NewSerializeBuffer()
+	// opts := gopacket.SerializeOptions{
+	// 	FixLengths:       true,
+	// 	ComputeChecksums: true,
+	// }
+
+	// err := gopacket.SerializeLayers(buffer, opts, &newIP, icmp)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to serialize layers")
+	// }
+
+	// return buffer.Bytes(), nil
 }
 
 // Whan data arrives at server, fix packet to be from src of server vpn IP and dst of main iface
@@ -127,23 +167,5 @@ func sendAck(conn net.Conn) error {
 		return err
 	}
 	log.Println("Sending ack to client")
-	return nil
-}
-
-func sendMain(data []byte) error {
-	// ip, err := getIfaceIP("eth0")
-	// if err != nil {
-	// 	return err
-	// }
-
-	conn, err := net.Dial("tcp", "127.0.0.1:80")
-	if err != nil {
-		return err
-	}
-
-	conn.Write(data)
-
-	// keyPacket := types.NewGlorpNPacket(0x07, data)
-	// _, err := conn.Write(keyPacket.Serialize())
 	return nil
 }
