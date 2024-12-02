@@ -18,6 +18,7 @@ import (
 type Client struct {
 	PublicIP       net.IP
 	Iface          net.Interface
+	TunSource      *gopacket.PacketSource
 	Authenticated  bool
 	WANIfaceHandle *pcap.Handle
 }
@@ -260,7 +261,11 @@ func getIfaceIP(ifaceName string) (string, error) {
 	}
 
 	if len(addrs) >= 1 {
-		return addrs[0].String(), nil
+		ip, _, err := net.ParseCIDR(addrs[0].String())
+		if err != nil {
+			return "", fmt.Errorf("failed to parse iface attached cidr: %w", err)
+		}
+		return ip.String(), nil 
 	}
 	return "", fmt.Errorf("iface did not have any addrs")
 }
@@ -273,13 +278,13 @@ func (c *Client) serve(wanIfaceName string) error {
 
 	listener, err := net.Listen("tcp", net.JoinHostPort(ip, "3000"))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to start listener on wan iface: %w", err)
 	}
 
 	// Create handle for main iface
 	c.WANIfaceHandle, err = pcap.OpenLive(wanIfaceName, 1600, true, pcap.BlockForever)
 	if err != nil {
-		fmt.Errorf("failed to create %v handle: %w", wanIfaceName, err)
+		return fmt.Errorf("failed to create %v handle: %w", wanIfaceName, err)
 	}
 
 	for {
@@ -327,10 +332,63 @@ func (c *Client) sendAck(conn net.Conn) error {
 	return nil
 }
 
-func (c *Client) Start(wanIfaceName, peerIP string) error {
-	// connect to server pub ip
+func (c *Client) createTun(cidr string) error {
+	// Create TUN interface
+	config := water.Config{
+		DeviceType: water.TUN, // Use water.TAP for a TAP device
+	}
+	config.Name = "tun0" // Optional: Specify the interface name
 
-	go c.serve(wanIfaceName)
+	iface, err := water.New(config)
+	if err != nil {
+		log.Fatalf("Failed to create TUN interface: %v", err)
+	}
+
+	link, err := tenus.NewLinkFrom(config.Name)
+	if err != nil {
+		log.Fatalf("Failed to get link for interface %s: %v", config.Name, err)
+	}
+
+	ipAddr, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		log.Fatalf("Failed to parse CIDR: %v", err)
+	}
+
+	// Assign the IP address
+	err = link.SetLinkIp(ipAddr, ipNet)
+	if err != nil {
+		log.Fatalf("Failed to set IP address: %v", err)
+	}
+
+	err = link.SetLinkUp()
+	if err != nil {
+		log.Fatalf("Failed to set tun link up: %v", err)
+	}
+
+	fmt.Printf("Interface %s is up\n", iface.Name())
+
+	handle, err := pcap.OpenLive("tun0", 1500, true, pcap.BlockForever)
+	if err != nil {
+		log.Fatalf("Faield to open live pcap: %v", err)
+	}
+
+	c.TunSource = gopacket.NewPacketSource(handle, handle.LinkType())
+
+	return nil
+}
+
+func (c *Client) Start(wanIfaceName, peerIP string) error {
+	// Create tun iface
+	cidr := "20.0.0.1/24"
+	err := c.createTun(cidr)
+	if err != nil {
+		return fmt.Errorf("failed to create tun iface at runtime, cidr: %v: %w", cidr, err)
+	}
+
+	err = c.serve(wanIfaceName)
+	if err != nil {
+		return err
+	}
 
 	if peerIP == "" {
 		fmt.Println("No peer, only listening")
@@ -338,7 +396,7 @@ func (c *Client) Start(wanIfaceName, peerIP string) error {
 		}
 	}
 
-	err := c.connect(peerIP)
+	err = c.connect(peerIP)
 	if err != nil {
 		return fmt.Errorf("failed to connect on peerip: %v: %w", peerIP, err)
 	}
