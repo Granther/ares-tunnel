@@ -19,7 +19,7 @@ const (
 )
 
 type Client struct {
-	PublicIP       net.IP
+	WANIp          string
 	Iface          net.Interface
 	TunSource      *gopacket.PacketSource
 	Authenticated  bool
@@ -69,6 +69,8 @@ func (c *Client) connect(ip string) error {
 	}
 	log.Println("Send some data to server")
 
+	c.TunnelConn = conn
+
 	return nil
 }
 
@@ -106,7 +108,15 @@ func (c *Client) sendHello(conn net.Conn) error {
 	return nil
 }
 
-func (c *Client) handleIncoming(conn net.Conn) error {
+func (c *Client) handleIncoming() error {
+	if c.isAuthenicated() {
+		var err error
+		c.TunnelConn, err = net.Dial("tcp", net.JoinHostPort(c.WANIp, "3000"))
+		if err != nil {
+			return err
+		}
+	}
+
 	for packet := range c.TunSource.Packets() {
 		networkLayer := packet.NetworkLayer()
 
@@ -118,14 +128,15 @@ func (c *Client) handleIncoming(conn net.Conn) error {
 
 		fmt.Println(packet.String())
 
-		glorpPack := types.NewGlorpNPacket(0x07, packet.Data())
-		_, err := conn.Write(glorpPack.Serialize())
-		if err != nil {
-			return err
-		}
 		if !c.isAuthenicated() {
 			fmt.Println("Not authenicated, skipping...")
 			continue
+		}
+
+		glorpPack := types.NewGlorpNPacket(0x07, packet.Data())
+		_, err := c.TunnelConn.Write(glorpPack.Serialize())
+		if err != nil {
+			return err
 		}
 	}
 
@@ -230,6 +241,8 @@ func (c *Client) serve(wanIfaceName string) error {
 	if err != nil {
 		return err
 	}
+
+	c.WANIp = ip
 
 	// c.TunnelConn, err = net.Dial("tcp", net.JoinHostPort(ip, "3000"))
 	// if err != nil {
@@ -370,7 +383,7 @@ func (c *Client) Start(wanIfaceName, peerIP string) error {
 		}
 	}
 
-	err = c.handleIncoming(c.TunnelConn)
+	err = c.handleIncoming()
 	if err != nil {
 		return fmt.Errorf("failed to handle incoming non-3000 traffic: %w", err)
 	}
