@@ -270,9 +270,17 @@ func (c *Client) handle(conn net.Conn) error {
 		packet := types.NewGlorpNPacket(buf[0], buf[1:len(buf)-1])
 		if packet.Header == 1 {
 			fmt.Println("Client Hello packet")
-			c.sendAck(conn)
+			err = c.sendAck(conn)
+			if err != nil {
+				fmt.Println("Ack returned errer, dont care")
+			} else {
+				fmt.Println("Ack returned fine. authenicating")
+				c.Authenticated = true
+			}
 		} else if packet.Header == 7 {
-			fmt.Println("Recieved some data")
+			pack := gopacket.NewPacket(packet.Data, layers.LayerTypeIPv4, gopacket.Default)
+			fmt.Println("Recieved Packet: \n: ", pack.String())
+
 			err = c.WANIfaceHandle.WritePacketData(packet.Data)
 			if err != nil {
 				return err
