@@ -10,6 +10,9 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
 	"github.com/milosgajdos/tenus"
 	"github.com/net-byte/water"
 )
@@ -166,26 +169,55 @@ func (c *Client) handleIncoming(conn net.Conn, ip string) error {
 
 	fmt.Printf("Interface %s is up\n", iface.Name())
 
-	// Process packets
-	packet := make([]byte, 1500) // MTU size
-	for {
-		n, err := iface.Read(packet)
-		if err != nil {
-			log.Fatalf("Error reading packet: %v", err)
-		}
-		fmt.Printf("Received packet: %x\n", packet[:n])
-		glorpPack := types.NewGlorpNPacket(0x07, packet[:n])
-		_, err = conn.Write(glorpPack.Serialize())
-		if err != nil {
-			return err
-		}
-		if !c.isAuthenicated() {
-			fmt.Println("Not authenicated, skipping...")
-			continue
-		}
-		// Process the packet
-		// Write responses back to iface.Write(packet[:n]) if needed
+	handle, err := pcap.OpenLive("tun0", 1500, true, pcap.BlockForever)
+	if err != nil {
+		log.Fatalf("Faield to open live pcap: %v", err)
 	}
+
+	packets := gopacket.NewPacketSource(handle, handle.LinkType())
+
+	for packet := range packets.Packets() {
+		networkLayer := packet.NetworkLayer()
+
+		ipv4Layers, ok := networkLayer.(*layers.IPv4)
+		if ok {
+			fmt.Println("is ipv4")
+		} else {
+			fmt.Println("is not")
+		}
+	}
+
+	// Process packets
+	// packet := make([]byte, 1500) // MTU size
+	// for {
+	// 	n, err := iface.Read(packet)
+	// 	if err != nil {
+	// 		log.Fatalf("Error reading packet: %v", err)
+	// 	}
+	// 	fmt.Printf("Received packet: %x\n", packet[:n])
+
+	// 	gopack := gopacket.NewPacket(packet[:n], layers.LayerTypeEthernet, gopacket.Default)
+	// 	networkLayer := gopack.NetworkLayer()
+
+	// 	_, ok := networkLayer.(*gopacket.IPv4)
+	// 	if ok {
+	// 		fmt.Println("is ipv4")
+	// 	} else {
+	// 		fmt.Println("is not")
+	// 	}
+
+	// 	glorpPack := types.NewGlorpNPacket(0x07, packet[:n])
+	// 	_, err = conn.Write(glorpPack.Serialize())
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	if !c.isAuthenicated() {
+	// 		fmt.Println("Not authenicated, skipping...")
+	// 		continue
+	// 	}
+	// 	// Process the packet
+	// 	// Write responses back to iface.Write(packet[:n]) if needed
+	// }
 
 	// handle, err := pcap.OpenLive("eth0", 1500, true, pcap.BlockForever)
 	// if err != nil {
