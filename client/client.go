@@ -60,6 +60,11 @@ func (c *Client) connectServer(ip string) error { // Called from 'client' to pub
 	}
 	log.Println("Send some data to server")
 
+	err = c.handle(conn)
+	if err != nil {
+		return fmt.Errorf("failed to handle conn as the client")
+	}
+
 	// err = c.handleIncoming(conn) {
 	// }
 
