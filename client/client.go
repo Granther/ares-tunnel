@@ -214,7 +214,6 @@ func (c *Client) handle(conn net.Conn) error {
 	// if err != nil {
 	// 	return fmt.Errorf("failed to create %v handle: %w", "Eth0", err)
 	// }
-	var dstAddr *net.IPAddr
 	buf := make([]byte, BUFSIZE)
 	for {
 		_, err := conn.Read(buf[:])
@@ -236,26 +235,14 @@ func (c *Client) handle(conn net.Conn) error {
 			fmt.Println("Recieved Packet: \n: ", pack.String())
 
 			ipv4Layer, ok := pack.NetworkLayer().(*layers.IPv4)
-			if ok {
-				dstIp := ipv4Layer.DstIP
-				destIp, netIp, err := net.ParseCIDR(dstIp.String())
-				if err != nil {
-					return fmt.Errorf("failed to convert dest ip to cidr")
-				}
-				dstAddr, err = net.ResolveIPAddr(destIp.String(), netIp.String())
-				if err != nil {
-
-				}
-			}
-
-			sock := syscall.RawSockaddrInet4{
-				
+			if !ok {
+				fmt.Println("Not ipv4, skipping")
+				continue
 			}
 
 			dstAddr := &syscall.SockaddrInet4{
 				Port: 80,
 				Addr: [4]byte(ipv4Layer.DstIP),
-				raw: fd,
 			}
 
 			err = syscall.Sendto(fd, pack.Data(), 0, dstAddr)
