@@ -307,6 +307,10 @@ func (c *Client) Start(wanIfaceName, peerIP string) error {
 		}
 	}
 
+	endch := make(chan int)
+
+	<-endch
+
 	return nil
 
 	// go c.serve(wanIfaceName)
