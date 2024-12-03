@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	BUFSIZE = 4096
+	BUFSIZE = 1500
 )
 
 type Client struct {
+	WANIfaceName   string
 	WANIp          string
 	Iface          net.Interface
 	TunSource      *gopacket.PacketSource
@@ -203,7 +204,7 @@ func (c *Client) handle(conn net.Conn) error {
 	fmt.Println("Connected to: ", conn.RemoteAddr())
 	c.TunnelConn = conn
 
-	han, err := pcap.OpenLive("eth0", 1600, true, pcap.BlockForever)
+	han, err := pcap.OpenLive(c.WANIfaceName, 1600, true, pcap.BlockForever)
 	if err != nil {
 		return fmt.Errorf("failed to create %v handle: %w", "Eth0", err)
 	}
@@ -302,6 +303,7 @@ func (c *Client) Start(wanIfaceName, peerIP string) error {
 		return fmt.Errorf("failed to create tun iface at runtime, cidr: %v: %w", cidr, err)
 	}
 
+	c.WANIfaceName = wanIfaceName
 	go c.handleIncoming()
 
 	// Are you the server or client?
