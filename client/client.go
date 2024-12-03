@@ -23,7 +23,7 @@ type Client struct {
 	TunSource      *gopacket.PacketSource
 	Authenticated  bool
 	WANIfaceHandle *pcap.Handle
-	TunnelConn     *net.Conn
+	TunnelConn     net.Conn
 }
 
 func NewClient() types.Client {
@@ -37,6 +37,8 @@ func (c *Client) connectServer(ip string) error { // Called from 'client' to pub
 	if err != nil {
 		return err
 	}
+
+	c.TunnelConn = conn
 
 	log.Printf("Dialed server at ip %s\n", ip)
 
@@ -110,9 +112,8 @@ func (c *Client) handleIncoming() error {
 	for packet := range c.TunSource.Packets() {
 		networkLayer := packet.NetworkLayer()
 
-		ipv4Layers, ok := networkLayer.(*layers.IPv4)
+		_, ok := networkLayer.(*layers.IPv4)
 		if ok {
-			fmt.Println(ipv4Layers.SrcIP.String())
 			fmt.Println("is ipv4")
 		}
 
@@ -125,7 +126,7 @@ func (c *Client) handleIncoming() error {
 
 		fmt.Println("Writing to tunnel conn")
 		glorpPack := types.NewGlorpNPacket(0x07, packet.Data())
-		_, err := (*c.TunnelConn).Write(glorpPack.Serialize())
+		_, err := c.TunnelConn.Write(glorpPack.Serialize())
 		if err != nil {
 			return err
 		}
@@ -194,6 +195,7 @@ func (c *Client) serve(wanIfaceName string) error {
 
 func (c *Client) handle(conn net.Conn) error {
 	fmt.Println("Connected to: ", conn.RemoteAddr())
+	c.TunnelConn = conn
 	buf := make([]byte, BUFSIZE)
 	for {
 		fmt.Println("Waiting for read")
@@ -287,6 +289,8 @@ func (c *Client) Start(wanIfaceName, peerIP string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create tun iface at runtime, cidr: %v: %w", cidr, err)
 	}
+
+	go c.handleIncoming()
 
 	// Are you the server or client?
 
