@@ -202,11 +202,15 @@ func (c *Client) handle(conn net.Conn) error {
 	// c.sendData(conn, "Sent from hadle before loop")
 	fmt.Println("Connected to: ", conn.RemoteAddr())
 	c.TunnelConn = conn
+
+	han, err := pcap.OpenLive("eth0", 1600, true, pcap.BlockForever)
+	if err != nil {
+		return fmt.Errorf("failed to create %v handle: %w", "Eth0", err)
+	}
+
 	buf := make([]byte, BUFSIZE)
 	for {
-		fmt.Println("Waiting for read")
 		_, err := conn.Read(buf[:])
-		fmt.Println("Got read")
 		if err != nil {
 			return fmt.Errorf("err while reading from remote conn, closing conn and waiting again: %v", err)
 		}
@@ -224,9 +228,11 @@ func (c *Client) handle(conn net.Conn) error {
 			pack := gopacket.NewPacket(packet.Data, layers.LayerTypeIPv4, gopacket.Default)
 			fmt.Println("Recieved Packet: \n: ", pack.String())
 
-			err = (*c.WANIfaceHandle).WritePacketData(pack.Data())
+			err = han.WritePacketData(pack.Data())
 			if err != nil {
-				return err
+				fmt.Println("failure to write data to wire: ", err)
+				continue
+				// return fmt.Errorf("failure to write data to wire: %w", err)
 			}
 		}
 	}
