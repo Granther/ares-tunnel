@@ -5,6 +5,7 @@ import (
 	"glorpn/types"
 	"log"
 	"net"
+	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -204,7 +205,7 @@ func (c *Client) handle(conn net.Conn) error {
 	fmt.Println("Connected to: ", conn.RemoteAddr())
 	c.TunnelConn = conn
 
-	han, err := pcap.OpenLive(c.WANIfaceName, 1600, true, pcap.BlockForever)
+	han, err := pcap.OpenLive(c.WANIfaceName, 1600, false, time.Millisecond)
 	if err != nil {
 		return fmt.Errorf("failed to create %v handle: %w", "Eth0", err)
 	}
