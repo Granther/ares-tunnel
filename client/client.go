@@ -33,17 +33,6 @@ func NewClient() types.Client {
 	}
 }
 
-func monitorExiting(tun *os.File) {
-	buf := make([]byte, 1024)
-	for {
-		_, err := (*tun).Read(buf[:])
-		if err != nil {
-			log.Fatalf("Error in monitor exiting: %w \n", err)
-		}
-		fmt.Println("Data", string(buf))
-	}
-}
-
 func (c *Client) connect(ip string) error {
 	conn, err := net.Dial("tcp", net.JoinHostPort(ip, "3000"))
 	if err != nil {
@@ -140,73 +129,6 @@ func (c *Client) handleIncoming() error {
 		}
 	}
 
-	// Process packets
-	// packet := make([]byte, 1500) // MTU size
-	// for {
-	// 	n, err := iface.Read(packet)
-	// 	if err != nil {
-	// 		log.Fatalf("Error reading packet: %v", err)
-	// 	}
-	// 	fmt.Printf("Received packet: %x\n", packet[:n])
-
-	// 	gopack := gopacket.NewPacket(packet[:n], layers.LayerTypeEthernet, gopacket.Default)
-	// 	networkLayer := gopack.NetworkLayer()
-
-	// 	_, ok := networkLayer.(*gopacket.IPv4)
-	// 	if ok {
-	// 		fmt.Println("is ipv4")
-	// 	} else {
-	// 		fmt.Println("is not")
-	// 	}
-
-	// 	glorpPack := types.NewGlorpNPacket(0x07, packet[:n])
-	// 	_, err = conn.Write(glorpPack.Serialize())
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	if !c.isAuthenicated() {
-	// 		fmt.Println("Not authenicated, skipping...")
-	// 		continue
-	// 	}
-	// 	// Process the packet
-	// 	// Write responses back to iface.Write(packet[:n]) if needed
-	// }
-
-	// handle, err := pcap.OpenLive("eth0", 1500, true, pcap.BlockForever)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// packetSrc := gopacket.NewPacketSource(handle, handle.LinkType())
-	// for packet := range packetSrc.Packets() {
-	// 	fmt.Println("Got packet on dummy")
-	// 	glorpPack := types.NewGlorpNPacket(0x07, packet.Data())
-	// 	_, err := conn.Write(glorpPack.Serialize())
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	if !c.isAuthenicated() {
-	// 		continue
-	// 	}
-	// }
-
-	// listener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP(ip), Port: 80})
-	// if err != nil {
-	// 	return err
-	// }
-	// //buf := make([]byte, 2048)
-	// fmt.Println("Made it here 2")
-	// for {
-	// 	_, err = listener.Accept()
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	fmt.Println("Accepted")
-	// 	// fmt.Println("Got data: ", string(buf))
-	// 	if !c.isAuthenicated() {
-	// 		continue
-	// 	}
-	// }
 	return nil
 }
 
@@ -243,11 +165,6 @@ func (c *Client) serve(wanIfaceName string) error {
 	}
 
 	c.WANIp = ip
-
-	// c.TunnelConn, err = net.Dial("tcp", net.JoinHostPort(ip, "3000"))
-	// if err != nil {
-	// 	return fmt.Errorf("failed to start listener on wan iface: %w", err)
-	// }
 
 	listener, err := net.Listen("tcp", net.JoinHostPort(ip, "3000"))
 	if err != nil {
@@ -387,7 +304,77 @@ func (c *Client) Start(wanIfaceName, peerIP string) error {
 	}
 
 	return nil
+}
 
+	// Process packets
+	// packet := make([]byte, 1500) // MTU size
+	// for {
+	// 	n, err := iface.Read(packet)
+	// 	if err != nil {
+	// 		log.Fatalf("Error reading packet: %v", err)
+	// 	}
+	// 	fmt.Printf("Received packet: %x\n", packet[:n])
+
+	// 	gopack := gopacket.NewPacket(packet[:n], layers.LayerTypeEthernet, gopacket.Default)
+	// 	networkLayer := gopack.NetworkLayer()
+
+	// 	_, ok := networkLayer.(*gopacket.IPv4)
+	// 	if ok {
+	// 		fmt.Println("is ipv4")
+	// 	} else {
+	// 		fmt.Println("is not")
+	// 	}
+
+	// 	glorpPack := types.NewGlorpNPacket(0x07, packet[:n])
+	// 	_, err = conn.Write(glorpPack.Serialize())
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	if !c.isAuthenicated() {
+	// 		fmt.Println("Not authenicated, skipping...")
+	// 		continue
+	// 	}
+	// 	// Process the packet
+	// 	// Write responses back to iface.Write(packet[:n]) if needed
+	// }
+
+	// handle, err := pcap.OpenLive("eth0", 1500, true, pcap.BlockForever)
+	// if err != nil {
+	// 	return err
+	// }
+
+	// packetSrc := gopacket.NewPacketSource(handle, handle.LinkType())
+	// for packet := range packetSrc.Packets() {
+	// 	fmt.Println("Got packet on dummy")
+	// 	glorpPack := types.NewGlorpNPacket(0x07, packet.Data())
+	// 	_, err := conn.Write(glorpPack.Serialize())
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	if !c.isAuthenicated() {
+	// 		continue
+	// 	}
+	// }
+
+	// listener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP(ip), Port: 80})
+	// if err != nil {
+	// 	return err
+	// }
+	// //buf := make([]byte, 2048)
+	// fmt.Println("Made it here 2")
+	// for {
+	// 	_, err = listener.Accept()
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	fmt.Println("Accepted")
+	// 	// fmt.Println("Got data: ", string(buf))
+	// 	if !c.isAuthenicated() {
+	// 		continue
+	// 	}
+	// }
+
+	
 	// iface, err := water.New(water.Config{DeviceType: water.TUN})
 	// if err != nil {
 	// 	return err
@@ -454,4 +441,3 @@ func (c *Client) Start(wanIfaceName, peerIP string) error {
 	// 	keyPacket := types.NewGlorpNPacket(buf[0], buf[1:len(buf)-1])
 	// 	fmt.Println("Key: ", string(keyPacket.Data))
 	// }
-}
