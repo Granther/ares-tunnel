@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	BUFSIZE = 1024
+	BUFSIZE = 2048
 )
 
 type Client struct {
@@ -78,7 +78,7 @@ func (c *Client) sendData(conn net.Conn, data string) error {
 }
 
 func (c *Client) awaitAck(conn net.Conn) error {
-	buf := make([]byte, 1024)
+	buf := make([]byte, BUFSIZE)
 	for {
 		_, err := conn.Read(buf[:])
 		if err != nil {
@@ -199,7 +199,7 @@ func (c *Client) serve(wanIfaceName string) error {
 }
 
 func (c *Client) handle(conn net.Conn) error {
-	c.sendData(conn, "Sent from hadle before loop")
+	// c.sendData(conn, "Sent from hadle before loop")
 	fmt.Println("Connected to: ", conn.RemoteAddr())
 	c.TunnelConn = conn
 	buf := make([]byte, BUFSIZE)
