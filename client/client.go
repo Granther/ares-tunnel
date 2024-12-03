@@ -121,13 +121,13 @@ func (c *Client) handleIncoming() error {
 			continue
 		}
 
+		fmt.Println("Writing to tunnel conn")
 		glorpPack := types.NewGlorpNPacket(0x07, packet.Data())
 		_, err := (*c.TunnelConn).Write(glorpPack.Serialize())
 		if err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -190,11 +190,13 @@ func (c *Client) serve(wanIfaceName string) error {
 	}
 }
 
+// ping -> tun iface -> client
+
 func (c *Client) handle(conn net.Conn) error {
 	fmt.Println("Connected to: ", conn.RemoteAddr())
 	buf := make([]byte, BUFSIZE)
 	for {
-		_, err := conn.Read(buf[:])
+		_, err := (*c.TunnelConn).Read(buf[:])
 		if err != nil {
 			return fmt.Errorf("err while reading from remote conn, closing conn and waiting again: %v", err)
 		}
