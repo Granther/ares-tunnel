@@ -5,7 +5,7 @@ import (
 	"glorpn/types"
 	"log"
 	"net"
-	"time"
+	"syscall"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -205,11 +205,16 @@ func (c *Client) handle(conn net.Conn) error {
 	fmt.Println("Connected to: ", conn.RemoteAddr())
 	c.TunnelConn = conn
 
-	han, err := pcap.OpenLive(c.WANIfaceName, 1600, false, time.Millisecond)
+	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_DGRAM, syscall.IPPROTO_UDP)
 	if err != nil {
-		return fmt.Errorf("failed to create %v handle: %w", "Eth0", err)
+		return fmt.Errorf("failed to create raw socket in handle: %w", err)
 	}
 
+	// han, err := pcap.OpenLive(c.WANIfaceName, 1600, false, time.Millisecond)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to create %v handle: %w", "Eth0", err)
+	// }
+	var dstAddr *net.IPAddr
 	buf := make([]byte, BUFSIZE)
 	for {
 		_, err := conn.Read(buf[:])
@@ -230,12 +235,41 @@ func (c *Client) handle(conn net.Conn) error {
 			pack := gopacket.NewPacket(packet.Data, layers.LayerTypeIPv4, gopacket.Default)
 			fmt.Println("Recieved Packet: \n: ", pack.String())
 
-			err = han.WritePacketData(pack.Data())
-			if err != nil {
-				fmt.Println("failure to write data to wire: ", err)
-				continue
-				// return fmt.Errorf("failure to write data to wire: %w", err)
+			ipv4Layer, ok := pack.NetworkLayer().(*layers.IPv4)
+			if ok {
+				dstIp := ipv4Layer.DstIP
+				destIp, netIp, err := net.ParseCIDR(dstIp.String())
+				if err != nil {
+					return fmt.Errorf("failed to convert dest ip to cidr")
+				}
+				dstAddr, err = net.ResolveIPAddr(destIp.String(), netIp.String())
+				if err != nil {
+
+				}
 			}
+
+			sock := syscall.RawSockaddrInet4{
+				
+			}
+
+			dstAddr := &syscall.SockaddrInet4{
+				Port: 80,
+				Addr: [4]byte(ipv4Layer.DstIP),
+				raw: fd,
+			}
+
+			err = syscall.Sendto(fd, pack.Data(), 0, dstAddr)
+			if err != nil {
+				fmt.Println("failed to write data to wire: ", err)
+				continue
+			}
+
+			// err = han.WritePacketData(pack.Data())
+			// if err != nil {
+			// 	fmt.Println("failure to write data to wire: ", err)
+			// 	continue
+			// 	// return fmt.Errorf("failure to write data to wire: %w", err)
+			// }
 		}
 	}
 }
