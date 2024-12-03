@@ -5,7 +5,6 @@ import (
 	"glorpn/types"
 	"log"
 	"net"
-	"os"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -98,13 +97,13 @@ func (c *Client) sendHello(conn net.Conn) error {
 }
 
 func (c *Client) handleIncoming() error {
-	if c.isAuthenicated() && c.TunnelConn == nil {
-		var err error
-		*c.TunnelConn, err = net.Dial("tcp", net.JoinHostPort(c.WANIp, "3000"))
-		if err != nil {
-			return err
-		}
-	}
+	// if c.isAuthenicated() && c.TunnelConn == nil {
+	// 	var err error
+	// 	*c.TunnelConn, err = net.Dial("tcp", net.JoinHostPort(c.WANIp, "3000"))
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// }
 
 	for packet := range c.TunSource.Packets() {
 		networkLayer := packet.NetworkLayer()
@@ -180,6 +179,7 @@ func (c *Client) serve(wanIfaceName string) error {
 	for {
 		fmt.Println("Listening...")
 		conn, err := listener.Accept()
+		c.TunnelConn = &conn
 		if err != nil {
 			log.Fatalln("err while reading conn")
 		}
@@ -192,7 +192,7 @@ func (c *Client) serve(wanIfaceName string) error {
 
 func (c *Client) handle(conn net.Conn) error {
 	fmt.Println("Connected to: ", conn.RemoteAddr())
-	buf := make([]byte, 1024)
+	buf := make([]byte, BUFSIZE)
 	for {
 		_, err := conn.Read(buf[:])
 		if err != nil {
@@ -306,138 +306,137 @@ func (c *Client) Start(wanIfaceName, peerIP string) error {
 	return nil
 }
 
-	// Process packets
-	// packet := make([]byte, 1500) // MTU size
-	// for {
-	// 	n, err := iface.Read(packet)
-	// 	if err != nil {
-	// 		log.Fatalf("Error reading packet: %v", err)
-	// 	}
-	// 	fmt.Printf("Received packet: %x\n", packet[:n])
+// Process packets
+// packet := make([]byte, 1500) // MTU size
+// for {
+// 	n, err := iface.Read(packet)
+// 	if err != nil {
+// 		log.Fatalf("Error reading packet: %v", err)
+// 	}
+// 	fmt.Printf("Received packet: %x\n", packet[:n])
 
-	// 	gopack := gopacket.NewPacket(packet[:n], layers.LayerTypeEthernet, gopacket.Default)
-	// 	networkLayer := gopack.NetworkLayer()
+// 	gopack := gopacket.NewPacket(packet[:n], layers.LayerTypeEthernet, gopacket.Default)
+// 	networkLayer := gopack.NetworkLayer()
 
-	// 	_, ok := networkLayer.(*gopacket.IPv4)
-	// 	if ok {
-	// 		fmt.Println("is ipv4")
-	// 	} else {
-	// 		fmt.Println("is not")
-	// 	}
+// 	_, ok := networkLayer.(*gopacket.IPv4)
+// 	if ok {
+// 		fmt.Println("is ipv4")
+// 	} else {
+// 		fmt.Println("is not")
+// 	}
 
-	// 	glorpPack := types.NewGlorpNPacket(0x07, packet[:n])
-	// 	_, err = conn.Write(glorpPack.Serialize())
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	if !c.isAuthenicated() {
-	// 		fmt.Println("Not authenicated, skipping...")
-	// 		continue
-	// 	}
-	// 	// Process the packet
-	// 	// Write responses back to iface.Write(packet[:n]) if needed
-	// }
+// 	glorpPack := types.NewGlorpNPacket(0x07, packet[:n])
+// 	_, err = conn.Write(glorpPack.Serialize())
+// 	if err != nil {
+// 		return err
+// 	}
+// 	if !c.isAuthenicated() {
+// 		fmt.Println("Not authenicated, skipping...")
+// 		continue
+// 	}
+// 	// Process the packet
+// 	// Write responses back to iface.Write(packet[:n]) if needed
+// }
 
-	// handle, err := pcap.OpenLive("eth0", 1500, true, pcap.BlockForever)
-	// if err != nil {
-	// 	return err
-	// }
+// handle, err := pcap.OpenLive("eth0", 1500, true, pcap.BlockForever)
+// if err != nil {
+// 	return err
+// }
 
-	// packetSrc := gopacket.NewPacketSource(handle, handle.LinkType())
-	// for packet := range packetSrc.Packets() {
-	// 	fmt.Println("Got packet on dummy")
-	// 	glorpPack := types.NewGlorpNPacket(0x07, packet.Data())
-	// 	_, err := conn.Write(glorpPack.Serialize())
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	if !c.isAuthenicated() {
-	// 		continue
-	// 	}
-	// }
+// packetSrc := gopacket.NewPacketSource(handle, handle.LinkType())
+// for packet := range packetSrc.Packets() {
+// 	fmt.Println("Got packet on dummy")
+// 	glorpPack := types.NewGlorpNPacket(0x07, packet.Data())
+// 	_, err := conn.Write(glorpPack.Serialize())
+// 	if err != nil {
+// 		return err
+// 	}
+// 	if !c.isAuthenicated() {
+// 		continue
+// 	}
+// }
 
-	// listener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP(ip), Port: 80})
-	// if err != nil {
-	// 	return err
-	// }
-	// //buf := make([]byte, 2048)
-	// fmt.Println("Made it here 2")
-	// for {
-	// 	_, err = listener.Accept()
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	fmt.Println("Accepted")
-	// 	// fmt.Println("Got data: ", string(buf))
-	// 	if !c.isAuthenicated() {
-	// 		continue
-	// 	}
-	// }
+// listener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP(ip), Port: 80})
+// if err != nil {
+// 	return err
+// }
+// //buf := make([]byte, 2048)
+// fmt.Println("Made it here 2")
+// for {
+// 	_, err = listener.Accept()
+// 	if err != nil {
+// 		return err
+// 	}
+// 	fmt.Println("Accepted")
+// 	// fmt.Println("Got data: ", string(buf))
+// 	if !c.isAuthenicated() {
+// 		continue
+// 	}
+// }
 
-	
-	// iface, err := water.New(water.Config{DeviceType: water.TUN})
-	// if err != nil {
-	// 	return err
-	// }
+// iface, err := water.New(water.Config{DeviceType: water.TUN})
+// if err != nil {
+// 	return err
+// }
 
-	// fmt.Println("Iface name: ", iface.Name())
+// fmt.Println("Iface name: ", iface.Name())
 
-	// link, err := tenus.NewLinkFrom(iface.Name())
-	// if err != nil {
-	// 	return err
-	// }
+// link, err := tenus.NewLinkFrom(iface.Name())
+// if err != nil {
+// 	return err
+// }
 
-	// err = link.SetLinkMTU(1300)
-	// if nil != err {
-	// 	log.Fatalln("Unable to set MTU to 1300 on interface")
-	// }
+// err = link.SetLinkMTU(1300)
+// if nil != err {
+// 	log.Fatalln("Unable to set MTU to 1300 on interface")
+// }
 
-	// lIp, lNet, err := net.ParseCIDR("10.11.0.1/24")
-	// if err != nil {
-	// 	return err
-	// }
+// lIp, lNet, err := net.ParseCIDR("10.11.0.1/24")
+// if err != nil {
+// 	return err
+// }
 
-	// err = link.SetLinkIp(lIp, lNet)
-	// if err != nil {
-	// 	return err
-	// }
+// err = link.SetLinkIp(lIp, lNet)
+// if err != nil {
+// 	return err
+// }
 
-	// err = link.SetLinkUp()
-	// if err != nil {
-	// 	return err
-	// }
+// err = link.SetLinkUp()
+// if err != nil {
+// 	return err
+// }
 
-	// buf := make([]byte, 2048)
-	// for {
-	// 	_, err := net.Listen("tcp", "192.168.1.250:")
-	// 	//_, err := iface.Read(buf[:])
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	fmt.Printf("Data: %s \n", string(buf))
-	// 	pack := types.NewGlorpNPacket(0x07, buf)
-	// 	conn.Write(pack.Serialize())
-	// }
+// buf := make([]byte, 2048)
+// for {
+// 	_, err := net.Listen("tcp", "192.168.1.250:")
+// 	//_, err := iface.Read(buf[:])
+// 	if err != nil {
+// 		return err
+// 	}
+// 	fmt.Printf("Data: %s \n", string(buf))
+// 	pack := types.NewGlorpNPacket(0x07, buf)
+// 	conn.Write(pack.Serialize())
+// }
 
-	// Every packet that hits tun0 gets sent out destined for port 3000
+// Every packet that hits tun0 gets sent out destined for port 3000
 
-	// conn, err := net.Dial("tcp", "10.0.0.1:3000")
-	// if err != nil {
-	// 	log.Fatalln("unable to dial")
-	// }
-	// // opcode := []byte(0x01)
-	// data := []byte("Hello")
+// conn, err := net.Dial("tcp", "10.0.0.1:3000")
+// if err != nil {
+// 	log.Fatalln("unable to dial")
+// }
+// // opcode := []byte(0x01)
+// data := []byte("Hello")
 
-	// packet := types.NewGlorpNPacket(0x07, data)
-	// conn.Write(packet.Serialize())
+// packet := types.NewGlorpNPacket(0x07, data)
+// conn.Write(packet.Serialize())
 
-	// fmt.Println("Listening for key packet...")
-	// var buf [1024]byte
-	// for {
-	// 	_, err = conn.Read(buf[:])
-	// 	if err != nil {
-	// 		log.Fatalln("err reading key packet from server")
-	// 	}
-	// 	keyPacket := types.NewGlorpNPacket(buf[0], buf[1:len(buf)-1])
-	// 	fmt.Println("Key: ", string(keyPacket.Data))
-	// }
+// fmt.Println("Listening for key packet...")
+// var buf [1024]byte
+// for {
+// 	_, err = conn.Read(buf[:])
+// 	if err != nil {
+// 		log.Fatalln("err reading key packet from server")
+// 	}
+// 	keyPacket := types.NewGlorpNPacket(buf[0], buf[1:len(buf)-1])
+// 	fmt.Println("Key: ", string(keyPacket.Data))
+// }
