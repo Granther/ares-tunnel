@@ -194,6 +194,7 @@ func (c *Client) serve(wanIfaceName string) error {
 }
 
 func (c *Client) handle(conn net.Conn) error {
+	c.sendData(conn, "Sent from hadle before loop")
 	fmt.Println("Connected to: ", conn.RemoteAddr())
 	c.TunnelConn = conn
 	buf := make([]byte, BUFSIZE)
