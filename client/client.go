@@ -32,11 +32,12 @@ func NewClient() types.Client {
 	}
 }
 
-func (c *Client) connect(ip string) error {
-	conn, err := net.Dial("tcp", net.JoinHostPort(ip, "3000"))
+func (c *Client) connectServer(ip string) error { // Called from 'client' to pubip
+	conn, err := net.Dial("tcp", net.JoinHostPort(ip, "3000")) // Dial is remote, listen is local
 	if err != nil {
 		return err
 	}
+
 	log.Printf("Dialed server at ip %s\n", ip)
 
 	err = c.sendHello(conn)
@@ -57,7 +58,8 @@ func (c *Client) connect(ip string) error {
 	}
 	log.Println("Send some data to server")
 
-	c.TunnelConn = &conn
+	// err = c.handleIncoming(conn) {
+	// }
 
 	return nil
 }
@@ -157,6 +159,7 @@ func getIfaceIP(ifaceName string) (string, error) {
 }
 
 // Listen on main wan iface for port 3000 traffic
+// Called by 'server'
 func (c *Client) serve(wanIfaceName string) error {
 	ip, err := getIfaceIP(wanIfaceName)
 	if err != nil {
@@ -179,7 +182,6 @@ func (c *Client) serve(wanIfaceName string) error {
 	for {
 		fmt.Println("Listening...")
 		conn, err := listener.Accept()
-		c.TunnelConn = &conn
 		if err != nil {
 			log.Fatalln("err while reading conn")
 		}
@@ -190,13 +192,13 @@ func (c *Client) serve(wanIfaceName string) error {
 	}
 }
 
-// ping -> tun iface -> client
-
 func (c *Client) handle(conn net.Conn) error {
 	fmt.Println("Connected to: ", conn.RemoteAddr())
 	buf := make([]byte, BUFSIZE)
 	for {
-		_, err := (*c.TunnelConn).Read(buf[:])
+		fmt.Println("Waiting for read")
+		_, err := conn.Read(buf[:])
+		fmt.Println("Got read")
 		if err != nil {
 			return fmt.Errorf("err while reading from remote conn, closing conn and waiting again: %v", err)
 		}
@@ -286,26 +288,47 @@ func (c *Client) Start(wanIfaceName, peerIP string) error {
 		return fmt.Errorf("failed to create tun iface at runtime, cidr: %v: %w", cidr, err)
 	}
 
-	go c.serve(wanIfaceName)
-	// if err != nil {
-	// 	return err
-	// }
+	// Are you the server or client?
 
-	if peerIP == "" {
-		fmt.Println("No peer, only listening")
-	} else {
-		err = c.connect(peerIP)
+	// Client. Has pub ip
+	if peerIP != "" {
+		err = c.connectServer(peerIP)
 		if err != nil {
-			return fmt.Errorf("failed to connect on peerip: %v: %w", peerIP, err)
+			return err
+		}
+	} else { // Server
+		err = c.serve(wanIfaceName)
+		if err != nil {
+			return err
 		}
 	}
 
-	err = c.handleIncoming()
-	if err != nil {
-		return fmt.Errorf("failed to handle incoming non-3000 traffic: %w", err)
-	}
-
 	return nil
+
+	// go c.serve(wanIfaceName)
+	// // if err != nil {
+	// // 	return err
+	// // }
+
+	// // if peerIP == "" {
+	// // 	fmt.Println("No peer, only listening")
+	// // } else {
+	// // 	err = c.connect(peerIP)
+	// // 	if err != nil {
+	// // 		return fmt.Errorf("failed to connect on peerip: %v: %w", peerIP, err)
+	// // 	}
+	// // }
+
+	// err = c.connect(peerIP)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to connect on peerip: %v: %w", peerIP, err)
+	// }
+
+	// err = c.handleIncoming()
+	// if err != nil {
+	// 	return fmt.Errorf("failed to handle incoming non-3000 traffic: %w", err)
+	// }
+
 }
 
 // Process packets

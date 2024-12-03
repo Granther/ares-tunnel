@@ -40,3 +40,7 @@ sudo ip link set up dev tap0
 sudo ip link add dev dummy0 type dummy
 sudo ip link set dummy0 up
 sudo ip addr add 18.0.0.1/24 dev dummy0
+
+### 2 Clients
+- Client 1 (server), listens without peer ip
+    - When connection is made on port 3000, 
