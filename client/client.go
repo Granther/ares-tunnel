@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	BUFSIZE = 2048
+	BUFSIZE = 4096
 )
 
 type Client struct {
@@ -224,7 +224,7 @@ func (c *Client) handle(conn net.Conn) error {
 			pack := gopacket.NewPacket(packet.Data, layers.LayerTypeIPv4, gopacket.Default)
 			fmt.Println("Recieved Packet: \n: ", pack.String())
 
-			err = c.WANIfaceHandle.WritePacketData(packet.Data)
+			err = (*c.WANIfaceHandle).WritePacketData(pack.Data())
 			if err != nil {
 				return err
 			}
