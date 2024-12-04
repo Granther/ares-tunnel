@@ -276,8 +276,12 @@ func (c *Client) resourcePack(packet gopacket.Packet) ([]byte, error) {
 		return nil, fmt.Errorf("packet does not have ipv4 layer")
 	}
 
+	fmt.Println("iplayer is not nil")
+
 	oldIp, _ := ipLayer.(*layers.IPv4)
 	ip := *oldIp
+
+	fmt.Println("Converted to iplayer and made copy")
 
 	newPacket := gopacket.NewSerializeBuffer()
 	newSrcIP := net.IPv4(20, 0, 0, 10)
@@ -311,8 +315,10 @@ func (c *Client) resourcePack(packet gopacket.Packet) ([]byte, error) {
 		return nil, fmt.Errorf("non-tcp non-udp transport layer")
 	}
 
+	fmt.Println("Options and serializing")
+
 	options := gopacket.SerializeOptions{
-		FixLengths: true,
+		FixLengths:       true,
 		ComputeChecksums: true,
 	}
 
