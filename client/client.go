@@ -231,8 +231,15 @@ func (c *Client) handle(conn net.Conn) error {
 				c.Authenticated = true
 			}
 		} else if packet.Header == 7 {
-			pack := gopacket.NewPacket(packet.Data, layers.LayerTypeIPv4, gopacket.Default)
-			fmt.Println("Recieved Packet: \n: ", pack.String())
+			recvPack := gopacket.NewPacket(packet.Data, layers.LayerTypeIPv4, gopacket.Default)
+			// fmt.Println("Recieved Packet: \n: ", p.String())
+
+			resourcedBytes, err := c.resourcePack(recvPack)
+			if err != nil {
+				return fmt.Errorf("unable to re-source packet received from peer: %w", err)
+			}
+
+			pack := gopacket.NewPacket(resourcedBytes, layers.LayerTypeIPv4, gopacket.Default)
 
 			ipv4Layer, ok := pack.NetworkLayer().(*layers.IPv4)
 			if !ok {
@@ -241,7 +248,7 @@ func (c *Client) handle(conn net.Conn) error {
 			}
 
 			dstAddr := &syscall.SockaddrInet4{
-				Port: 80,
+				// Port: 80,
 				Addr: [4]byte(ipv4Layer.DstIP),
 			}
 
@@ -259,6 +266,59 @@ func (c *Client) handle(conn net.Conn) error {
 			// }
 		}
 	}
+}
+
+func (c *Client) resourcePack(packet gopacket.Packet) ([]byte, error) {
+	ipLayer := packet.Layer(layers.LayerTypeIPv4)
+	if ipLayer == nil {
+		return nil, fmt.Errorf("packet does not have ipv4 layer")
+	}
+
+	ip, _ := ipLayer.(*layers.IPv4)
+
+	newPacket := gopacket.NewSerializeBuffer()
+	newSrcIP := net.IPv4(20, 0, 0, 10)
+	newDstIP := net.IPv4(8, 8, 8, 8)
+
+	ip.SrcIP = newSrcIP
+	ip.DstIP = newDstIP
+	ip.Checksum = 0
+
+	var transportLayer gopacket.SerializableLayer
+	switch packet.TransportLayer().LayerType() {
+	case layers.LayerTypeTCP:
+		tcpLayer := packet.Layer(layers.LayerTypeTCP)
+		if tcpLayer == nil {
+			return nil, fmt.Errorf("tcp is empty")
+		}
+		tcp, _ := tcpLayer.(*layers.TCP)
+		// Update checksums later
+		tcp.SetNetworkLayerForChecksum(ip)
+		transportLayer = tcp
+	case layers.LayerTypeUDP:
+		udpLayer := packet.Layer(layers.LayerTypeUDP)
+		if udpLayer == nil {
+			return nil, fmt.Errorf("udp is empty")
+		}
+		udp, _ := udpLayer.(*layers.UDP)
+		// Update checksums later
+		udp.SetNetworkLayerForChecksum(ip)
+		transportLayer = udp
+	default:
+		return nil, fmt.Errorf("non-tcp non-udp transport layer")
+	}
+
+	options := gopacket.SerializeOptions{
+		FixLengths: true,
+		ComputeChecksums: true,
+	}
+
+	err := gopacket.SerializeLayers(newPacket, options, ip, transportLayer)
+	if err != nil {
+		return nil, fmt.Errorf("unable to serialize layers: %w", err)
+	}
+
+	return newPacket.Bytes(), nil
 }
 
 func (c *Client) sendAck(conn net.Conn) error {
