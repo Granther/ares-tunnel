@@ -218,7 +218,7 @@ func (c *Client) handle(conn net.Conn) error {
 	for {
 		_, err := conn.Read(buf[:])
 		if err != nil {
-			return fmt.Errorf("err while reading from remote conn, closing conn and waiting again: %v", err)
+			return fmt.Errorf("err while reading from remote conn, closing conn and waiting again: %w", err)
 		}
 		packet := types.NewGlorpNPacket(buf[0], buf[1:len(buf)-1])
 		if packet.Header == 1 {
@@ -276,7 +276,8 @@ func (c *Client) resourcePack(packet gopacket.Packet) ([]byte, error) {
 		return nil, fmt.Errorf("packet does not have ipv4 layer")
 	}
 
-	ip, _ := ipLayer.(*layers.IPv4)
+	oldIp, _ := ipLayer.(*layers.IPv4)
+	ip := *oldIp
 
 	newPacket := gopacket.NewSerializeBuffer()
 	newSrcIP := net.IPv4(20, 0, 0, 10)
@@ -295,7 +296,7 @@ func (c *Client) resourcePack(packet gopacket.Packet) ([]byte, error) {
 		}
 		tcp, _ := tcpLayer.(*layers.TCP)
 		// Update checksums later
-		tcp.SetNetworkLayerForChecksum(ip)
+		tcp.SetNetworkLayerForChecksum(&ip)
 		transportLayer = tcp
 	case layers.LayerTypeUDP:
 		udpLayer := packet.Layer(layers.LayerTypeUDP)
@@ -304,7 +305,7 @@ func (c *Client) resourcePack(packet gopacket.Packet) ([]byte, error) {
 		}
 		udp, _ := udpLayer.(*layers.UDP)
 		// Update checksums later
-		udp.SetNetworkLayerForChecksum(ip)
+		udp.SetNetworkLayerForChecksum(&ip)
 		transportLayer = udp
 	default:
 		return nil, fmt.Errorf("non-tcp non-udp transport layer")
@@ -315,7 +316,7 @@ func (c *Client) resourcePack(packet gopacket.Packet) ([]byte, error) {
 		ComputeChecksums: true,
 	}
 
-	err := gopacket.SerializeLayers(newPacket, options, ip, transportLayer)
+	err := gopacket.SerializeLayers(newPacket, options, &ip, transportLayer)
 	if err != nil {
 		return nil, fmt.Errorf("unable to serialize layers: %w", err)
 	}
