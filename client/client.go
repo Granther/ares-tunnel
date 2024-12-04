@@ -236,7 +236,9 @@ func (c *Client) handle(conn net.Conn) error {
 
 			resourcedBytes, err := c.resourcePack(recvPack)
 			if err != nil {
-				return fmt.Errorf("unable to re-source packet received from peer: %w", err)
+				fmt.Println("Error resourcing packet, err: %w", err)
+				continue
+				// return fmt.Errorf("unable to re-source packet received from peer: %w", err)
 			}
 
 			pack := gopacket.NewPacket(resourcedBytes, layers.LayerTypeIPv4, gopacket.Default)
